@@ -1,0 +1,70 @@
+<html>
+
+<!-- 
+TODO
+[ ] document json with metadata, title and UID key name
+[ ] app metadata, last open file
+[ ] start off with initial document
+
+[ ] insert context menu
+[ ] slash, todo, and bullet list inference at start of top level element
+[ ] key commands
+
+ -->
+
+<head>
+  <style>
+    body {
+      background-color: silver;
+      margin: 0;
+      font-family: 'Courier New', Courier, monospace;
+    }
+
+    sidebar {
+      position: absolute;
+      top: 0px;
+      bottom: 0px;
+      width: 200px;
+      border-right: 1px solid black;
+      padding: 1em;
+    }
+
+    note {
+      position: absolute;
+      background: white;
+      left: 200px;
+      top: 0px;
+      bottom: 0px;
+      right: 0px;
+      padding: 1em;
+    }
+  </style>
+</head>
+
+<body>
+  <sidebar>
+    <h2>localnotes</h2>
+  </sidebar>
+  <note contenteditable="true"></note>
+
+  <script>
+
+    function SaveNote(k) {
+      s = document.querySelector("note").innerHTML
+      localStorage.setItem(k, s)
+    }
+
+    function LoadNote(k) {
+      document.querySelector("note").innerHTML = localStorage.getItem(k)
+    }
+
+    document.querySelector("note").addEventListener("input", function () {
+      SaveNote("untitled")
+    }, false);
+
+    LoadNote("untitled")
+
+  </script>
+</body>
+
+</html>
