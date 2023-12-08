@@ -5,12 +5,18 @@ TODO
 [x] document json with metadata, title and UID key name
 [x] app metadata, last open file
 [x] start off with initial document
+[x] better system for 'new note' and 'open note'
+[ ] assertions about document health
+[ ] notes have created and edited date
 
-[ ] mini Vdom
+[x] mini Vdom
+    [x] class and id parsing from tag strings like 'div.foo#bar'
 
-[ ] draw sidebar
-    [ ] click file to open
-    [ ] new file button
+[x] draw sidebar
+    [x] click file to open
+    [x] new file button
+
+[ ] document title
 
 [ ] insert context menu
 [ ] slash, todo, and bullet list inference at start of top level element
@@ -24,9 +30,12 @@ TODO
   
   <style>
     body {
-      background-color: silver;
       margin: 0;
       font-family: 'Courier New', Courier, monospace;
+    }
+
+    sidebar, document, note {
+      box-sizing: border-box;
     }
 
     sidebar {
@@ -35,21 +44,50 @@ TODO
       bottom: 0px;
       width: 200px;
       border-right: 1px solid black;
+      background-color: silver;
       padding: 1em;
     }
 
-    sidebar p {
+    sidebar ul {
         font-size: 0.8em;
+        padding-left: 12px;
+        cursor: pointer;
+      }
+      
+      sidebar li {
+        margin-top: 4px;
+      }
+      sidebar li:hover {
+        text-decoration: underline;
       }
 
-    note {
-      position: absolute;
+    sidebar li span {
+      display: inline-block;
       background: white;
+      font-size: 10px;
+      padding: 1px 4px;
+      border-radius: 6px;
+    }
+
+    * {outline: 1px solid rgba(255,0,0,0.1);}
+    document {
+      position: absolute;
       left: 200px;
-      top: 0px;
+      top: 0px
       bottom: 0px;
       right: 0px;
       padding: 1em;
+    }
+
+    #title {
+      font-size: 4em;
+
+    }
+    note {
+      width: 100%;
+      height: 100vh;
+      position: relative;
+      display: block;
     }
   </style>
 </head>
@@ -57,85 +95,111 @@ TODO
 <body>
   <sidebar>
     <h2>localnotes</h2>
-    <content>
-
-    </content>
+    <content></content>
   </sidebar>
-  <note contenteditable="true"></note>
+  <document>
+    <h1 id="title" contenteditable="true">title</h1>
+    <note contenteditable="true"></note>
+  </document>
+
 
   <script>
     const DOC_VERSION = 0;
     var note = null;
 
-    function el(tag, attrs, text) {
-      e = document.createElement(tag)
-      for ([k, v] of Object.entries(attrs || {})) {
-        e.setAttribute(k, v)
-      }
-      if (text) {
-        e.appendChild(document.createTextNode(text))
-      }
-      return e
-    }
+    "span.foo.bar#main".match(/^[^\.#]+/)
+
+    "span.foo.bar#main".match(/\.[^\.#]+/g) 
+    "span.foo.bar#main".match(/\#[^\.#]+/g) 
+
+    // construct a dom fragment from nested ['tag', optional {attrs}, ... children]
+    function Render(node) {
+      if (!node) {
+        return
+      } else if (typeof(node) === 'string') {
+        return document.createTextNode(node) 
+      } else {
+        let tag = node[0].match(/^[^\.#]+/)[0]
+        let classes = node[0].match(/\.[^\.#]+/g) || []
+        let ids = node[0].match(/\#[^\.#]+/g) || []
+        let attrs = Object.prototype.toString.call(node[1]) === '[object Object]' ? node[1] : null
+        let children = node.slice(attrs ? 2 : 1)
+        let el = document.createElement(tag)
+        if (attrs) {
+          for ([k, v] of Object.entries(attrs)) {
+            if (typeof(v) === 'function') {
+              el[k] = v
+            } else {
+              el.setAttribute(k, v)
+            }}}
+        classes.forEach((s)=>el.classList.add(s.slice(1)))
+        if (ids[0]) {el.setAttribute('id', (ids[0].slice(1)))}
+        children.forEach((child)=>{
+          let cnode = Render(child)
+          if (cnode) {
+            el.appendChild(cnode)}})
+        return el}}
 
     function SaveMeta(){
       localStorage.setItem('meta', JSON.stringify(meta))
     }
 
-    function NewDocument() {
-      return {
-        uid: Math.random().toString(16).slice(2),
-        title: "Untitled Document",
-        content: "",
-        version: DOC_VERSION}
-    }
 
-    function OpenDocument(uid) {
-      note = JSON.parse(localStorage.getItem(uid)) || NewDocument()
-      meta.current_note = note.uid
-    }
-
-    function SaveNote() {
-      s = document.querySelector("note").innerHTML
-      note.content = s
+    function SaveNote(note) {
       localStorage.setItem(note.uid, JSON.stringify(note))
     }
 
-    function MountNote() {
+    function NewNote() {
+      res = {
+        uid: Math.random().toString(16).slice(2),
+        title: "Untitled",
+        content: "",
+        version: DOC_VERSION}
+      SaveNote(res)
+      return res
+    }
+
+    function OpenNote(uid) {
+      note = JSON.parse(localStorage.getItem(uid))
+      meta.current_note = note.uid
       document.querySelector("note").innerHTML = note.content
     }
 
     
+
+    
     function RenderSidebar() {
-      content = document.querySelector('sidebar content')
-      content.innerHTML = null
-      content.appendChild(el('button', {onclick: 'alert("ok!")'}, "+ new note"))
-      for ([k,v] of Object.entries(localStorage)){
-        if (k != 'meta') {
-          try {
-            o = JSON.parse(v)
-            content.appendChild(el('p', {onclick: 'alert("ok!")'}, `${o.title} (${k})`))
-          } catch (error) {
-            console.error(error)
-          }
-          
-        }
-      }
+      document.querySelector('sidebar content').replaceChildren(
+        Render(
+          ['div',
+            ['button', {onclick: (e)=>{OpenNote(NewNote().uid); RenderSidebar()}}, "+ new note"],
+            ['ul'].concat(
+              Object.entries(localStorage).map(([k,v])=>{
+                try {
+                  if (k != 'meta') {
+                    o = JSON.parse(v)
+                    return ['li', {onclick: (e)=>OpenNote(k)}, o.title, ['div', ['span', k]]]
+                  }
+                } catch (error) {
+                  console.error(error)
+                }
+              }))
+          ]))
     }
 
     document.querySelector("note").addEventListener("input", function () {
-      SaveNote()
+      s = document.querySelector("note").innerHTML
+      note.content = s
+      SaveNote(note)
     }, false)
 
 
 
     var meta = JSON.parse(localStorage.getItem('meta')) || {current_note: null}
 
-    OpenDocument(meta.current_note)
+    OpenNote(meta.current_note || NewNote().uid)
 
     SaveMeta()
-    MountNote()
-    SaveNote()
     RenderSidebar()
 
   </script>
