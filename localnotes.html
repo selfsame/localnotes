@@ -7,7 +7,7 @@ TODO
 [x] start off with initial document
 [x] better system for 'new note' and 'open note'
 [ ] assertions about document health
-[ ] notes have created and edited date
+[x] notes have created and edited date
 [ ] can delete and duplicate notes
 
 [x] mini Vdom
@@ -19,9 +19,23 @@ TODO
 
 [x] document title
 
+[ ] contentEditable changes sanitize dom
+    [ ] greenlist of top level elements, strip everything else
+    [ ] selection styling (bold, italic) this is dificult but I've done it before in another project!
+[ ] drag and drop restructuring
+    [ ] generic system, will use in sidebar and document
+    [ ] configure hotspots for drop before, inside, after, left, right
 [ ] insert context menu
 [ ] slash, todo, and bullet list inference at start of top level element
 [ ] key commands
+
+[ ] emoji picker
+[ ] 'file structure' graph in meta
+    [ ] notes can have 'child' notes
+[ ] simple search
+[ ] export all data
+[ ] storage space estimator
+[ ] handle running out of space (alert user, ???)
 
 [ ] can navigate between title and content with cursor
 
@@ -149,6 +163,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     }
 
     function SaveNote(note) {
+      note.edited = new Date()
       localStorage.setItem(note.uid, JSON.stringify(note))
     }
 
@@ -157,8 +172,11 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       res = {
         uid: Math.random().toString(16).slice(2),
         title: `${random_emoji} Untitled`,
-        content: "",
-        version: DOC_VERSION}
+        content: "<p></p>",
+        version: DOC_VERSION,
+        created: new Date(),
+        edited: new Date()
+      }
       SaveNote(res)
       return res
     }
@@ -168,6 +186,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       meta.current_note = note.uid
       document.querySelector("#title").textContent = note.title
       document.querySelector("note").innerHTML = note.content
+      SaveMeta()
     }
 
     function SyncContent () {
@@ -187,14 +206,9 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
                 try {
                   if (k != 'meta') {
                     o = JSON.parse(v)
-                    return ['li', {onclick: (e)=>OpenNote(k)}, o.title]
-                  }
+                    return ['li', {onclick: (e)=>OpenNote(k)}, o.title]}
                 } catch (error) {
-                  console.error(error)
-                }
-              }))
-          ]))
-    }
+                  console.error(error)}}))]))}
 
     document.querySelector("note").addEventListener("input", SyncContent, false)
     document.querySelector("#title").addEventListener("input", ()=>{SyncContent(); RenderSidebar()}, false)
@@ -203,8 +217,6 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     var meta = JSON.parse(localStorage.getItem('meta')) || {current_note: null}
 
     OpenNote(meta.current_note || NewNote().uid)
-
-    SaveMeta()
     RenderSidebar()
 
   </script>
