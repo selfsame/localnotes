@@ -9,6 +9,7 @@ TODO
 [ ] assertions about document health
 [x] notes have created and edited date
 [ ] can delete and duplicate notes
+[ ] better in-memory storage of notes (don't have to parse every time i render sidebar or do a search)
 
 [x] mini Vdom
     [x] class and id parsing from tag strings like 'div.foo#bar'
@@ -39,6 +40,14 @@ TODO
 
 [ ] can navigate between title and content with cursor
 
+
+Today's project
+[ ] 'lint' fn whenever you make a change
+    [x] convert non greenlist top level nodes into <p>
+    [x] slurp any text nodes before converted node
+    [ ] handle weird case with empty editable and cursor going to start of p after enter
+    [ ] save and restore selection - should note the start/end nodes and offsets, then attempt to rebuild from those elements
+[ ] keydown actions
 
  -->
 
@@ -103,6 +112,21 @@ TODO
       min-height: calc(100vh - 200px);
       position: relative;
       display: block;
+    }
+
+    note *::before, note *::after {
+      content: "<?>";
+      display: inline-block;
+      font-family: courier;
+      font-size: 12px;
+      color: purple;
+    }
+
+    note p::before {
+      content: "<p>"
+    }
+    note p::after {
+      content: "</p>"
     }
 
   </style>
@@ -189,11 +213,65 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       SaveMeta()
     }
 
-    function SyncContent () {
+    function SyncContent() {
       note.content = document.querySelector("note").innerHTML
       note.title = document.querySelector("#title").innerText
       SaveNote(note)
     }
+
+    function ReplaceWithTag(el, tag){
+      nel = Render([tag])
+      el.childNodes.forEach((e)=>nel.appendChild(e))
+      el.replaceWith(nel)
+      return nel
+    }
+
+    function SaveSelection(){
+      s = getSelection()
+      window._ranges = []
+      for (let i = 0; i < s.rangeCount; i++) {
+        r = s.getRangeAt(i)
+        window._ranges.push({start: r.startContainer, end: r.endContainer, so: r.startOffset, eo: r.endOffset})
+      }
+    }
+
+    function LoadSelection(){
+      s = getSelection()
+      s.removeAllRanges()
+      for (r of window._ranges) {
+        nr = new Range()
+        nr.setStart(r.start, r.so)
+        nr.setEnd(r.end, r.eo)
+        s.addRange(nr)
+      }
+    }
+
+    function LintNote() {
+      console.log("===== Lint =====")
+      el = document.querySelector("note")
+      console.log(el.innerHTML)
+      for (node of el.children){
+
+        if (!['P', 'IMG'].includes(node.tagName)) {
+          node = ReplaceWithTag(node, 'p')
+        }
+        while (node.previousSibling && node.previousSibling.nodeName === "#text") {
+          node.prepend(node.previousSibling)
+        }
+      }
+      // possible to have top level text when starting from empty editable
+      SaveSelection()
+      for (node of el.childNodes){
+        if (node.nodeName === "#text") {
+          p = Render(['p'])
+          node.replaceWith(p)
+          p.appendChild(node)
+        }
+      }
+      LoadSelection()
+      console.log(el.innerHTML)
+    }
+
 
     
     function RenderSidebar() {
@@ -210,7 +288,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
                 } catch (error) {
                   console.error(error)}}))]))}
 
-    document.querySelector("note").addEventListener("input", SyncContent, false)
+    document.querySelector("note").addEventListener("input", ()=>{LintNote(); SyncContent()}, false)
     document.querySelector("#title").addEventListener("input", ()=>{SyncContent(); RenderSidebar()}, false)
 
 
