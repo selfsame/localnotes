@@ -40,14 +40,19 @@ TODO
 
 [ ] can navigate between title and content with cursor
 
+BUGS
+
+[ ] figure out why undo isn't working after paste
+
 
 Today's project
 [ ] 'lint' fn whenever you make a change
     [x] convert non greenlist top level nodes into <p>
     [x] slurp any text nodes before converted node
-    [ ] handle weird case with empty editable and cursor going to start of p after enter
-    [ ] save and restore selection - should note the start/end nodes and offsets, then attempt to rebuild from those elements
+    [x] handle weird case with empty editable and cursor going to start of p after enter
+    [x] save and restore selection - should note the start/end nodes and offsets, then attempt to rebuild from those elements
 [ ] keydown actions
+    [ ] tab & shift+tab to indent / dedent
 
  -->
 
@@ -114,6 +119,27 @@ Today's project
       display: block;
     }
 
+    .indent1 {margin-left: 1em;}
+    .indent2 {margin-left: 2em;}
+    .indent3 {margin-left: 3em;}
+    .indent4 {margin-left: 4em;}
+    .indent5 {margin-left: 5em;}
+    .indent6 {margin-left: 6em;}
+    .indent7 {margin-left: 7em;}
+    .indent8 {margin-left: 8em;}
+    .indent9 {margin-left: 9em;}
+    .indent10 {margin-left: 10em;}
+    .indent11 {margin-left: 11em;}
+    .indent12 {margin-left: 12em;}
+    .indent13 {margin-left: 13em;}
+    .indent14 {margin-left: 14em;}
+    .indent15 {margin-left: 15em;}
+    .indent16 {margin-left: 16em;}
+    .indent17 {margin-left: 17em;}
+    .indent18 {margin-left: 18em;}
+    .indent19 {margin-left: 19em;}
+    .indent20 {margin-left: 20em;}
+
     note *::before, note *::after {
       content: "<?>";
       display: inline-block;
@@ -152,7 +178,12 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     const DOC_VERSION = 0;
     var note = null;
 
-    
+    Array.prototype.distinct = function(){
+      let res = []
+      for (let x of this){
+        if (!res.includes(x)) {
+          res.push(x)}}
+      return res}
 
     // construct a dom fragment from nested ['tag', optional {attrs}, ... children]
     function Render(node) {
@@ -226,6 +257,37 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       return nel
     }
 
+
+
+    function AncestorChild(el, ancestor){
+      while (el != ancestor && el.parentNode != ancestor) {
+        el = el.parentNode}
+      return el}
+
+    // this should be a list of 'shallow' siblings that have the selection intersecting them
+    // 1. find the common ancestor
+    // 2. for start and end find the ancestor inside the common (so 1 level deep), these will be siblings
+    // 3. iterate via nextSibling to get the list
+    function SelectedElements(){
+      res = []
+      s = getSelection()
+      if (s.rangeCount > 0) {
+        r = s.getRangeAt(0)
+        start = AncestorChild(r.startContainer, r.commonAncestorContainer)
+        end = AncestorChild(r.endContainer, r.commonAncestorContainer)
+        res.push(start)
+        if (start != end) {
+          while (start.nextElementSibling && start.nextElementSibling != end) {
+            start = start.nextElementSibling
+            res.push(start)
+          }
+          res.push(end)
+        }
+      }
+      res = res.map((n)=> n.nodeName === "#text" ? n.parentNode : n)
+      return res.distinct()
+    }
+
     function SaveSelection(){
       s = getSelection()
       window._ranges = []
@@ -273,6 +335,20 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     }
 
 
+    function OPIndent(n){
+      for (el of SelectedElements()) {
+        let level = 0
+        let existing = el.className.match(/indent(\d+)/)
+        if (existing) {
+          el.classList.remove(existing[0])
+          level = parseInt(existing[1])
+        }
+        if (n + level > 0) {
+          el.classList.add(`indent${n+level}`)
+        }
+      }
+    }
+
     
     function RenderSidebar() {
       document.querySelector('sidebar content').replaceChildren(
@@ -290,6 +366,14 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
 
     document.querySelector("note").addEventListener("input", ()=>{LintNote(); SyncContent()}, false)
     document.querySelector("#title").addEventListener("input", ()=>{SyncContent(); RenderSidebar()}, false)
+    document.querySelector("note").addEventListener("keydown", (e) => {
+      console.log(e)
+      if (e.key === "Tab") {
+        e.preventDefault()
+        OPIndent(e.shiftKey ? -1 : 1)
+      }
+      SyncContent()
+    })
 
 
     var meta = JSON.parse(localStorage.getItem('meta')) || {current_note: null}
