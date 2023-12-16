@@ -46,13 +46,9 @@ BUGS
 
 
 Today's project
-[ ] 'lint' fn whenever you make a change
-    [x] convert non greenlist top level nodes into <p>
-    [x] slurp any text nodes before converted node
-    [x] handle weird case with empty editable and cursor going to start of p after enter
-    [x] save and restore selection - should note the start/end nodes and offsets, then attempt to rebuild from those elements
-[ ] keydown actions
-    [ ] tab & shift+tab to indent / dedent
+[ ] detect when #text is at beginning of a 'block' for auto conversion (like todo, bullet), basically shouldn't trigger after an inline element
+
+getSelection().getRangeAt(0).getBoundingClientRect()
 
  -->
 
@@ -140,20 +136,41 @@ Today's project
     .indent19 {margin-left: 19em;}
     .indent20 {margin-left: 20em;}
 
-    note *::before, note *::after {
+    todo {
+      display: block;
+      text-indent: -1.8em;
+      padding-left: 1.8em;
+    }
+
+    todo::before {
+      content: '';
+      display: inline-block;
+      width: 1em;
+      height: 1em;
+      margin-right: 0.5em;
+      position: relative;
+      top: 0.3em;
+      border: 2px solid black;
+      cursor: pointer;
+    }
+
+    todo.checked::before {
+      background: #3a8dec;
+    }rgb(18, 127, 216)rgb(42, 159, 255)
+
+    /* note *::before, note *::after {
       content: "<?>";
       display: inline-block;
       font-family: courier;
-      font-size: 12px;
+      font-size: 9px;
       color: purple;
     }
 
-    note p::before {
-      content: "<p>"
-    }
-    note p::after {
-      content: "</p>"
-    }
+    note p::before {content: "<p>"}
+    note p::after {content: "</p>"}
+
+    note div::before {content: "<div>"}
+    note div::after {content: "</div>"} */
 
   </style>
 </head>
@@ -250,14 +267,22 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       SaveNote(note)
     }
 
-    function ReplaceWithTag(el, tag){
-      nel = Render([tag])
+    function ReplaceNode(el, nel){
       el.childNodes.forEach((e)=>nel.appendChild(e))
       el.replaceWith(nel)
       return nel
     }
 
-
+    // only interested in collapsed cursors at the moment
+    function TextBeforeCursor(){
+      s = getSelection()
+      if (s.rangeCount > 0) {
+        r = s.getRangeAt(0)
+        if (r.collapsed == true & r.startContainer.nodeName === "#text") {
+          return r.startContainer.textContent.slice(0, r.startOffset)
+        }
+      }
+    }
 
     function AncestorChild(el, ancestor){
       while (el != ancestor && el.parentNode != ancestor) {
@@ -314,8 +339,8 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       console.log(el.innerHTML)
       for (node of el.children){
 
-        if (!['P', 'IMG'].includes(node.tagName)) {
-          node = ReplaceWithTag(node, 'p')
+        if (!['P', 'IMG', 'DIV', 'TODO'].includes(node.tagName)) {
+          node = ReplaceNode(node, Render(['p']))
         }
         while (node.previousSibling && node.previousSibling.nodeName === "#text") {
           node.prepend(node.previousSibling)
@@ -374,7 +399,18 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       }
       SyncContent()
     })
-
+    document.querySelector("note").addEventListener("keyup", (e) => {
+      if (e.code === "Space") {
+        var before = TextBeforeCursor()
+        var text = getSelection().getRangeAt(0).startContainer
+        if (before === "[] ") {
+          var block = text.parentNode
+          text.textContent = text.textContent.slice(3)
+          ReplaceNode(block, Render(['todo', {onclick: 'this.classList.toggle("checked")'}]))
+        }
+      }
+      SyncContent()
+    })
 
     var meta = JSON.parse(localStorage.getItem('meta')) || {current_note: null}
 
