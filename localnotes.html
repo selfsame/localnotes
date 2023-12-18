@@ -43,10 +43,14 @@ TODO
 BUGS
 
 [ ] figure out why undo isn't working after paste
+[ ] need to intercept deletion to fix issue where empty block isn't being removed, also needs to merge blocks (if cursor is at start of block)
 
 
 Today's project
 [ ] detect when #text is at beginning of a 'block' for auto conversion (like todo, bullet), basically shouldn't trigger after an inline element
+[ ] SplitBlock function, I want to intercept the "Enter" key command for certain blocks creating two of that kind.
+    - Could wait until things have settled and find the <br> before the cursor as the dividing node
+    - also take this opportunity to clear <todo> checked
 
 getSelection().getRangeAt(0).getBoundingClientRect()
 
@@ -138,25 +142,30 @@ getSelection().getRangeAt(0).getBoundingClientRect()
 
     todo {
       display: block;
+      margin: 0.2em 0;
       text-indent: -1.8em;
       padding-left: 1.8em;
+      pointer-events: none;
     }
 
     todo::before {
       content: '';
       display: inline-block;
-      width: 1em;
-      height: 1em;
+      width: 1.2em;
+      height: 1.2em;
       margin-right: 0.5em;
       position: relative;
-      top: 0.3em;
-      border: 2px solid black;
+      top: 0.25em;
+      box-sizing: border-box;
+      border-radius: 2px;
+      border: 3px solid #3a8dec;
       cursor: pointer;
+      pointer-events: auto;
     }
 
     todo.checked::before {
       background: #3a8dec;
-    }rgb(18, 127, 216)rgb(42, 159, 255)
+    }
 
     /* note *::before, note *::after {
       content: "<?>";
@@ -267,6 +276,17 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       SaveNote(note)
     }
 
+
+
+
+
+
+
+    function CurrentRange(){
+      var s = getSelection()
+      if (s.rangeCount > 0) {
+        return s.getRangeAt(0)}}
+
     function ReplaceNode(el, nel){
       el.childNodes.forEach((e)=>nel.appendChild(e))
       el.replaceWith(nel)
@@ -275,9 +295,8 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
 
     // only interested in collapsed cursors at the moment
     function TextBeforeCursor(){
-      s = getSelection()
-      if (s.rangeCount > 0) {
-        r = s.getRangeAt(0)
+      r = CurrentRange()
+      if (r) {
         if (r.collapsed == true & r.startContainer.nodeName === "#text") {
           return r.startContainer.textContent.slice(0, r.startOffset)
         }
@@ -295,9 +314,8 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     // 3. iterate via nextSibling to get the list
     function SelectedElements(){
       res = []
-      s = getSelection()
-      if (s.rangeCount > 0) {
-        r = s.getRangeAt(0)
+      r = CurrentRange()
+      if (r) {
         start = AncestorChild(r.startContainer, r.commonAncestorContainer)
         end = AncestorChild(r.endContainer, r.commonAncestorContainer)
         res.push(start)
@@ -360,6 +378,35 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     }
 
 
+    function SplitBlockAtSelection() {
+      let r = CurrentRange()
+      if (r && r.collapsed) {
+        let block = r.startContainer.nodeName === "#text" ? r.startContainer.parentNode : r.startContainer
+        let idx = r.startOffset
+        // todo if in a text node should split that into two
+        let temp = Render(['div'])
+        temp.innerHTML = block.outerHTML
+        duplicate = temp.children[0]
+        duplicate.innerHTML = ""
+        for (let i = block.childNodes.length-1; i >= 0 ; i--) {
+          let el = block.childNodes[i];
+          if (i >= idx) {
+            duplicate.prepend(el)
+          } else if (i == idx - 1 && el.nodeName === "BR") {
+            block.removeChild(el)
+          }
+        }
+        block.parentNode.insertBefore(duplicate, block.nextSibling)
+
+        let s = getSelection()
+        s.removeAllRanges()
+        let nr = new Range()
+        nr.setStart(duplicate, 0)
+        s.addRange(nr)
+
+      }
+    }
+
     function OPIndent(n){
       for (el of SelectedElements()) {
         let level = 0
@@ -375,6 +422,13 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     }
 
     
+
+
+
+
+
+
+
     function RenderSidebar() {
       document.querySelector('sidebar content').replaceChildren(
         Render(
@@ -389,6 +443,17 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
                 } catch (error) {
                   console.error(error)}}))]))}
 
+
+
+
+
+
+
+
+    
+
+
+                
     document.querySelector("note").addEventListener("input", ()=>{LintNote(); SyncContent()}, false)
     document.querySelector("#title").addEventListener("input", ()=>{SyncContent(); RenderSidebar()}, false)
     document.querySelector("note").addEventListener("keydown", (e) => {
@@ -399,6 +464,9 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       }
       SyncContent()
     })
+
+
+
     document.querySelector("note").addEventListener("keyup", (e) => {
       if (e.code === "Space") {
         var before = TextBeforeCursor()
@@ -407,6 +475,11 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
           var block = text.parentNode
           text.textContent = text.textContent.slice(3)
           ReplaceNode(block, Render(['todo', {onclick: 'this.classList.toggle("checked")'}]))
+        }
+      }
+      if (e.code === "Enter") {
+        if (['TODO'].includes(CurrentRange().startContainer.nodeName)){
+          SplitBlockAtSelection()
         }
       }
       SyncContent()
