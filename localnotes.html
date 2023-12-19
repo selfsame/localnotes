@@ -22,7 +22,7 @@ TODO
 
 [ ] contentEditable changes sanitize dom
     [ ] greenlist of top level elements, strip everything else
-    [ ] selection styling (bold, italic) this is dificult but I've done it before in another project!
+    [ ] selection styling (bold, italic). I actually think there's contenteditable commands to apply these things?
 [ ] drag and drop restructuring
     [ ] generic system, will use in sidebar and document
     [ ] configure hotspots for drop before, inside, after, left, right
@@ -47,12 +47,11 @@ BUGS
 
 
 Today's project
-[ ] detect when #text is at beginning of a 'block' for auto conversion (like todo, bullet), basically shouldn't trigger after an inline element
-[ ] SplitBlock function, I want to intercept the "Enter" key command for certain blocks creating two of that kind.
-    - Could wait until things have settled and find the <br> before the cursor as the dividing node
-    - also take this opportunity to clear <todo> checked
-
-getSelection().getRangeAt(0).getBoundingClientRect()
+[ ] deletion restructuring
+    [ ] backspace at start of node converts to <p>
+    [ ] backspace at <p> merges into previous node
+    [ ] selection spanning two blocks - deletion merges into start
+    
 
  -->
 
@@ -280,7 +279,13 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
 
 
 
+    function IsBlock(el){
+      return ['P', 'IMG', 'DIV', 'TODO'].includes(el.tagName)
+    }
 
+    function IsText(el){
+      return el.nodeName === "#text"
+    }
 
     function CurrentRange(){
       var s = getSelection()
@@ -396,6 +401,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
             block.removeChild(el)
           }
         }
+        duplicate.classList.remove("checked")
         block.parentNode.insertBefore(duplicate, block.nextSibling)
 
         let s = getSelection()
@@ -421,8 +427,36 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       }
     }
 
-    
 
+
+    function OPDelete(e){
+      let r = CurrentRange()
+      // figure out if I'm at the beginning of a block
+      if ((IsText(r.startContainer) 
+           && IsBlock(r.startContainer.parentNode) 
+           && !r.startContainer.previousSibling
+           && r.startOffset == 0)
+          || (IsBlock(r.startContainer) && r.startOffset == 0)){
+        // TODO for the second condition we end up deleting a character
+        let block = IsBlock(r.startContainer) ? r.startContainer : r.startContainer.parentNode
+        let before = block.previousSibling
+        let before_child_cnt = before.childNodes.length
+        if (before) {
+          block.childNodes.forEach((e)=>{before.appendChild(e)})
+          block.parentNode.removeChild(block)
+
+          // TODO generalize this
+          let s = getSelection()
+          s.removeAllRanges()
+          let nr = new Range()
+          nr.setStart(before, before_child_cnt)
+          s.addRange(nr)
+
+          e.preventDefault()
+        }
+        
+      }
+    }
 
 
 
@@ -461,6 +495,9 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       if (e.key === "Tab") {
         e.preventDefault()
         OPIndent(e.shiftKey ? -1 : 1)
+      }
+      if (e.key === "Backspace") {
+        OPDelete(e)
       }
       SyncContent()
     })
