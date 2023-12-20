@@ -42,15 +42,16 @@ TODO
 
 BUGS
 
-[ ] figure out why undo isn't working after paste
-[ ] need to intercept deletion to fix issue where empty block isn't being removed, also needs to merge blocks (if cursor is at start of block)
+[ ] figure out why undo isn't working after paste (probably need my own todo stack)
+[ ] pasting blocks isn't working, are custom tag names not supported with that? 
+[ ] indent should be pixel based so different font sizes line up
 
 
 Today's project
 [ ] deletion restructuring
     [ ] backspace at start of node converts to <p>
-    [ ] backspace at <p> merges into previous node
-    [ ] selection spanning two blocks - deletion merges into start
+    [x] backspace at <p> merges into previous node
+    [x] selection spanning two blocks - deletion merges into start
     
 
  -->
@@ -142,6 +143,7 @@ Today's project
     todo {
       display: block;
       margin: 0.2em 0;
+      line-height: 0.6em;
       text-indent: -1.8em;
       padding-left: 1.8em;
       pointer-events: none;
@@ -238,6 +240,9 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
             el.appendChild(cnode)}})
         return el}}
 
+
+    // Note file stuff    
+
     function SaveMeta(){
       localStorage.setItem('meta', JSON.stringify(meta))
     }
@@ -277,7 +282,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
 
 
 
-
+    // block manipulation
 
     function IsBlock(el){
       return ['P', 'IMG', 'DIV', 'TODO'].includes(el.tagName)
@@ -285,6 +290,14 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
 
     function IsText(el){
       return el.nodeName === "#text"
+    }
+
+    function PlaceCursor(node, offset){
+      let s = getSelection()
+      s.removeAllRanges()
+      let nr = new Range()
+      nr.setStart(node, offset)
+      s.addRange(nr)
     }
 
     function CurrentRange(){
@@ -362,7 +375,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       console.log(el.innerHTML)
       for (node of el.children){
 
-        if (!['P', 'IMG', 'DIV', 'TODO'].includes(node.tagName)) {
+        if (!['P', 'IMG', 'DIV', 'TODO', 'H1', 'H2', 'H3', 'H4'].includes(node.tagName)) {
           node = ReplaceNode(node, Render(['p']))
         }
         while (node.previousSibling && node.previousSibling.nodeName === "#text") {
@@ -404,11 +417,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
         duplicate.classList.remove("checked")
         block.parentNode.insertBefore(duplicate, block.nextSibling)
 
-        let s = getSelection()
-        s.removeAllRanges()
-        let nr = new Range()
-        nr.setStart(duplicate, 0)
-        s.addRange(nr)
+        PlaceCursor(duplicate, 0)
 
       }
     }
@@ -437,24 +446,40 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
            && !r.startContainer.previousSibling
            && r.startOffset == 0)
           || (IsBlock(r.startContainer) && r.startOffset == 0)){
-        // TODO for the second condition we end up deleting a character
         let block = IsBlock(r.startContainer) ? r.startContainer : r.startContainer.parentNode
-        let before = block.previousSibling
-        let before_child_cnt = before.childNodes.length
-        if (before) {
-          block.childNodes.forEach((e)=>{before.appendChild(e)})
-          block.parentNode.removeChild(block)
-
-          // TODO generalize this
-          let s = getSelection()
-          s.removeAllRanges()
-          let nr = new Range()
-          nr.setStart(before, before_child_cnt)
-          s.addRange(nr)
-
+        // delete at start converts other block types to a paragraph
+        console.log("block:", block)
+        if (block.tagName != "P") {
+          let el = ReplaceNode(block, Render(['p', {class: block.className}]))
+          PlaceCursor(el, 0)
           e.preventDefault()
+        } else {
+          let before = block.previousSibling
+          if (before) {
+            let before_child_cnt = before.childNodes.length
+            block.childNodes.forEach((e)=>{before.appendChild(e)})
+            block.parentNode.removeChild(block)
+            PlaceCursor(before, before_child_cnt)
+            e.preventDefault()
+          }
         }
+
         
+      }
+      // if selection isn't collapsed and is in two different blocks then
+      // deleteContents and merge the two blocks around the cursor
+      if (!r.collapsed && r.startContainer != r.endContainer) {
+        r.deleteContents()
+        r = CurrentRange()
+        let before = r.startContainer.childNodes[r.startOffset-1]
+        let after = r.startContainer.childNodes[r.startOffset]
+        if (before && after){
+          let before_child_cnt = before.childNodes.length
+          after.childNodes.forEach((e)=>{before.appendChild(e)})
+          after.parentNode.removeChild(after)
+          PlaceCursor(before, before_child_cnt)
+        }
+        e.preventDefault()
       }
     }
 
@@ -502,16 +527,17 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       SyncContent()
     })
 
-
+    
 
     document.querySelector("note").addEventListener("keyup", (e) => {
       if (e.code === "Space") {
-        var before = TextBeforeCursor()
-        var text = getSelection().getRangeAt(0).startContainer
+        let before = TextBeforeCursor()
+        let text = getSelection().getRangeAt(0).startContainer
         if (before === "[] ") {
-          var block = text.parentNode
+          let block = text.parentNode
           text.textContent = text.textContent.slice(3)
-          ReplaceNode(block, Render(['todo', {onclick: 'this.classList.toggle("checked")'}]))
+          let el = ReplaceNode(block, Render(['todo', {class: block.className, onclick: 'this.classList.toggle("checked")'}]))
+          PlaceCursor(el, 0)
         }
       }
       if (e.code === "Enter") {
