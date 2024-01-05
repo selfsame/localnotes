@@ -8,8 +8,11 @@ TODO
 [x] better system for 'new note' and 'open note'
 [ ] assertions about document health
 [x] notes have created and edited date
-[ ] can delete and duplicate notes
+[x] can delete notes
+[ ] can duplicate notes
 [ ] better in-memory storage of notes (don't have to parse every time i render sidebar or do a search)
+[ ] use indexedDB when available
+    [ ] common interface for both
 
 [x] mini Vdom
     [x] class and id parsing from tag strings like 'div.foo#bar'
@@ -19,6 +22,8 @@ TODO
     [x] new file button
 
 [x] document title
+
+[ ] more managable block, cursor, and lint system?
 
 [ ] contentEditable changes sanitize dom
     [ ] greenlist of top level elements, strip everything else
@@ -45,13 +50,17 @@ BUGS
 [ ] figure out why undo isn't working after paste (probably need my own todo stack)
 [ ] pasting blocks isn't working, are custom tag names not supported with that? 
 [ ] indent should be pixel based so different font sizes line up
-
+[ ] start of line command parsing can trigger when right after a <br>
+[ ] bug with deletion ops where some text after the cursor dissapears when deleting a selection, probably confused about the depth of the end node
+    [ ] having working undo would really help here
+[ ] new lining from an h1 is doing the backwards text entry thing (cursor is between top level blocks) - probably need a generic lint step that repositions cursors like that
+[ ] arrow key navigation is weird, will skip blocks depending on text alignment??
+[ ] firefox - when deleting text in a todo it will often place cursor in previous block when all text is deleted
+[ ] chrome - 'enter' on empty todo creates two new ones. AFAIK todo has a special bit of code to create new ones
 
 Today's project
-[ ] deletion restructuring
-    [ ] backspace at start of node converts to <p>
-    [x] backspace at <p> merges into previous node
-    [x] selection spanning two blocks - deletion merges into start
+[ ] roll my own undo/redo stack
+[ ] I'm in need of a debug section that shows the current range with live update
     
 
  -->
@@ -70,6 +79,11 @@ Today's project
       box-sizing: border-box;
     }
 
+    .hidden {
+      visibility: hidden;
+      pointer-events: none;
+    }
+
     sidebar {
       position: absolute;
       top: 0px;
@@ -79,17 +93,25 @@ Today's project
       padding: 1em;
     }
 
-    sidebar ul {
+    sidebar div.note-list {
         font-size: 0.8em;
-        padding-left: 12px;
+        padding: 12px 0px;
         cursor: pointer;
       }
       
-      sidebar li {
+      sidebar p {
         margin-top: 4px;
+        margin: 0em;
       }
-      sidebar li:hover {
+      sidebar p:hover {
         text-decoration: underline;
+      }
+
+      sidebar p button {
+        cursor: pointer;
+        margin-left: 1em;
+        padding: 0px 4px;
+        font-size: 9px;
       }
 
     /* * {outline: 1px solid rgba(255,0,0,0.1);} */
@@ -119,31 +141,39 @@ Today's project
       display: block;
     }
 
-    .indent1 {margin-left: 1em;}
-    .indent2 {margin-left: 2em;}
-    .indent3 {margin-left: 3em;}
-    .indent4 {margin-left: 4em;}
-    .indent5 {margin-left: 5em;}
-    .indent6 {margin-left: 6em;}
-    .indent7 {margin-left: 7em;}
-    .indent8 {margin-left: 8em;}
-    .indent9 {margin-left: 9em;}
-    .indent10 {margin-left: 10em;}
-    .indent11 {margin-left: 11em;}
-    .indent12 {margin-left: 12em;}
-    .indent13 {margin-left: 13em;}
-    .indent14 {margin-left: 14em;}
-    .indent15 {margin-left: 15em;}
-    .indent16 {margin-left: 16em;}
-    .indent17 {margin-left: 17em;}
-    .indent18 {margin-left: 18em;}
-    .indent19 {margin-left: 19em;}
-    .indent20 {margin-left: 20em;}
+    /* s = "";for (i = 1; i <= 20; i++) {s += `.indent${i} {margin-left: ${i*24}px;}\n`}; console.log(s)   */
+    .indent1 {margin-left: 24px;}
+    .indent2 {margin-left: 48px;}
+    .indent3 {margin-left: 72px;}
+    .indent4 {margin-left: 96px;}
+    .indent5 {margin-left: 120px;}
+    .indent6 {margin-left: 144px;}
+    .indent7 {margin-left: 168px;}
+    .indent8 {margin-left: 192px;}
+    .indent9 {margin-left: 216px;}
+    .indent10 {margin-left: 240px;}
+    .indent11 {margin-left: 264px;}
+    .indent12 {margin-left: 288px;}
+    .indent13 {margin-left: 312px;}
+    .indent14 {margin-left: 336px;}
+    .indent15 {margin-left: 360px;}
+    .indent16 {margin-left: 384px;}
+    .indent17 {margin-left: 408px;}
+    .indent18 {margin-left: 432px;}
+    .indent19 {margin-left: 456px;}
+    .indent20 {margin-left: 480px;}
+
+    li {
+      padding-left: 24px;
+    }
+    li::marker {
+      padding-left: 24px;
+    }
 
     todo {
       display: block;
       margin: 0.2em 0;
-      line-height: 0.6em;
+      line-height: 1em;
       text-indent: -1.8em;
       padding-left: 1.8em;
       pointer-events: none;
@@ -166,6 +196,10 @@ Today's project
 
     todo.checked::before {
       background: #3a8dec;
+    }
+
+    note * {
+      outline: 1px solid rgba(255, 0, 0, 0.199);
     }
 
     /* note *::before, note *::after {
@@ -267,11 +301,28 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     }
 
     function OpenNote(uid) {
-      note = JSON.parse(localStorage.getItem(uid))
-      meta.current_note = note.uid
-      document.querySelector("#title").textContent = note.title
-      document.querySelector("note").innerHTML = note.content
+      if (uid == null) {
+        note = null
+        meta.current_note = null
+        document.querySelector("document").classList.add("hidden")
+      } else {
+        note = JSON.parse(localStorage.getItem(uid))
+        meta.current_note = note.uid
+        document.querySelector("document").classList.remove("hidden")
+        document.querySelector("#title").textContent = note.title
+        document.querySelector("note").innerHTML = note.content
+      }
+      HISTORY = []
+      HIDX = 0
+      HistoryRecordState()
       SaveMeta()
+    }
+
+    function DeleteNote(uid){
+      if (note.uid == uid) {
+        OpenNote(null)
+      }
+      localStorage.removeItem(uid)
     }
 
     function SyncContent() {
@@ -281,6 +332,75 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     }
 
 
+
+
+
+    /* TODO 
+       [ ] undo/redo traversal
+       [ ] key command capture
+       [ ] state change truncates stack
+       [ ] stack length limit
+       [ ] cursor preservation
+    */
+    var HISTORY = []
+    var HIDX = 0
+
+    function HistoryRecordState(){
+      let s = document.querySelector("note").innerHTML
+      if (HISTORY[HIDX] != s) {
+        HISTORY = HISTORY.slice(0, HIDX+1)
+        HISTORY.push(s)
+        HIDX = HISTORY.length-1
+      }
+    }
+
+    function HistoryUndo(){
+      if (HIDX > 0) {
+        HIDX -= 1
+        document.querySelector("note").innerHTML = HISTORY[HIDX]
+      }
+    }
+
+    function HistoryRedo(){
+      if (HIDX < HISTORY.length-1) {
+        HIDX += 1
+        document.querySelector("note").innerHTML = HISTORY[HIDX]
+      }
+    }
+
+    // just want these to be the last registered events, can move to end of script area at some point
+    window.addEventListener("load", (event) => {
+      document.querySelector("note").addEventListener("keydown", (e) => {
+        if (e.key === "z" && e.ctrlKey === true) {
+          e.preventDefault()
+          HistoryUndo()
+        }
+        if (e.key === "y" && e.ctrlKey === true) {
+          e.preventDefault()
+          HistoryRedo()
+        }
+      })
+
+      document.querySelector("note").addEventListener("keyup", ()=>HistoryRecordState(), false)
+      setInterval(()=>HistoryRecordState(), 1000)
+    })
+
+
+
+
+    const block_defs = {
+      p: {shortcode: "/p", tagName: "P", vdom: ['p']},
+      h1: {shortcode: "/h1", tagName: "H1", vdom: ['h1']},
+      h2: {shortcode: "/h2", tagName: "H2", vdom: ['h2']},
+      h3: {shortcode: "/h3", tagName: "H3", vdom: ['h3']},
+      h4: {shortcode: "/h4", tagName: "H4", vdom: ['h4']},
+      hr: {shortcode: "/hr", tagName: "HR", vdom: ['hr']},
+      img: {shortcode: "/img", tagName: "IMG", vdom: ['img']},
+      li: {shortcode: "* ", tagName: "LI", vdom: ['li']},
+      todo: {shortcode: "[] ", tagName: "TODO", vdom: ['todo', {onclick: 'this.classList.toggle("checked")'}]}
+    }
+
+    const block_tags = Object.entries(block_defs).map(([k,v])=>v.tagName)
 
     // block manipulation
 
@@ -315,8 +435,8 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     function TextBeforeCursor(){
       r = CurrentRange()
       if (r) {
-        if (r.collapsed == true & r.startContainer.nodeName === "#text") {
-          return r.startContainer.textContent.slice(0, r.startOffset)
+        if (r.collapsed == true && r.startContainer.nodeName === "#text" && !r.startContainer.previousSibling) {
+          return r.startContainer.textContent.slice(0, r.startOffset).replace(/\u00A0/g, ' ')
         }
       }
     }
@@ -375,7 +495,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       console.log(el.innerHTML)
       for (node of el.children){
 
-        if (!['P', 'IMG', 'DIV', 'TODO', 'H1', 'H2', 'H3', 'H4'].includes(node.tagName)) {
+        if (!block_tags.includes(node.tagName)) {
           node = ReplaceNode(node, Render(['p']))
         }
         while (node.previousSibling && node.previousSibling.nodeName === "#text") {
@@ -493,12 +613,19 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
         Render(
           ['div',
             ['button', {onclick: (e)=>{OpenNote(NewNote().uid); RenderSidebar()}}, "+ new note"],
-            ['ul'].concat(
+            ['div.note-list'].concat(
               Object.entries(localStorage).map(([k,v])=>{
                 try {
                   if (k != 'meta') {
-                    o = JSON.parse(v)
-                    return ['li', {onclick: (e)=>OpenNote(k)}, o.title]}
+                    var o = JSON.parse(v)
+                    return ['p', {onclick: (e)=>OpenNote(k)}, o.title,
+                            ['button', {onclick: (e)=>{
+                              e.stopPropagation()
+                              if (confirm(`Delete note "${o.title}"`)){
+                                DeleteNote(k)
+                                RenderSidebar()
+                              }
+                            }}, 'x']]}
                 } catch (error) {
                   console.error(error)}}))]))}
 
@@ -517,6 +644,14 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     document.querySelector("#title").addEventListener("input", ()=>{SyncContent(); RenderSidebar()}, false)
     document.querySelector("note").addEventListener("keydown", (e) => {
       console.log(e)
+      let r = CurrentRange()
+      if (r.collapsed && r.startContainer === e.target) {
+        console.log("out of a block!!!")
+        let block = e.target.childNodes[r.startOffset] || e.target.childNodes[0] 
+        if (block) {
+          PlaceCursor(block, block.childNodes.length)
+        }
+      }
       if (e.key === "Tab") {
         e.preventDefault()
         OPIndent(e.shiftKey ? -1 : 1)
@@ -530,17 +665,22 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     
 
     document.querySelector("note").addEventListener("keyup", (e) => {
-      if (e.code === "Space") {
+      console.log("keyup")
+      if (true) { //(e.code === "Space") {
         let before = TextBeforeCursor()
         let text = getSelection().getRangeAt(0).startContainer
-        if (before === "[] ") {
-          let block = text.parentNode
-          text.textContent = text.textContent.slice(3)
-          let el = ReplaceNode(block, Render(['todo', {class: block.className, onclick: 'this.classList.toggle("checked")'}]))
-          PlaceCursor(el, 0)
+        for (const [k,v] of Object.entries(block_defs)) {
+          if (before === v.shortcode) {
+            let block = text.parentNode
+            text.textContent = text.textContent.slice(v.shortcode.length)
+            let el = ReplaceNode(block, Render(v.vdom))
+            el.setAttribute("class", block.className)
+            PlaceCursor(el, 0)
+          }
         }
+        
       }
-      if (e.code === "Enter") {
+      if (e.code === "Enter" && !e.shiftKey) {
         if (['TODO'].includes(CurrentRange().startContainer.nodeName)){
           SplitBlockAtSelection()
         }
