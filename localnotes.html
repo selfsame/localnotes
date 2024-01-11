@@ -44,23 +44,25 @@ TODO
 [ ] handle running out of space (alert user, ???)
 
 [ ] can navigate between title and content with cursor
+[ ] history should preserve per document during a session
 
 BUGS
 
-[ ] figure out why undo isn't working after paste (probably need my own todo stack)
+[x] figure out why undo isn't working after paste (probably need my own todo stack)
 [ ] pasting blocks isn't working, are custom tag names not supported with that? 
-[ ] indent should be pixel based so different font sizes line up
-[ ] start of line command parsing can trigger when right after a <br>
+[x] indent should be pixel based so different font sizes line up
+[x] start of line command parsing can trigger when right after a <br> (can't reproduce anymore)
 [ ] bug with deletion ops where some text after the cursor dissapears when deleting a selection, probably confused about the depth of the end node
     [ ] having working undo would really help here
-[ ] new lining from an h1 is doing the backwards text entry thing (cursor is between top level blocks) - probably need a generic lint step that repositions cursors like that
+[x] new lining from an h1 is doing the backwards text entry thing (cursor is between top level blocks) - probably need a generic lint step that repositions cursors like that
 [ ] arrow key navigation is weird, will skip blocks depending on text alignment??
-[ ] firefox - when deleting text in a todo it will often place cursor in previous block when all text is deleted
-[ ] chrome - 'enter' on empty todo creates two new ones. AFAIK todo has a special bit of code to create new ones
+[ ] firefox - when deleting text in a todo it will often place cursor in previous block when all text is deleted (only todo)
+[ ] chrome - 'enter' on empty todo creates two new ones. AFAIK todo has a special bit of code to create new ones so maybe element splitting is actually working in chrome - maybe a better fix for this is to use a <div class="todo"> instead of a <todo>
+[ ] chrome - /h1 can not place cursor in h1 when at end of block range?
 
 Today's project
-[ ] roll my own undo/redo stack
 [ ] I'm in need of a debug section that shows the current range with live update
+[ ] deletion ops is very broken, could probably use a complete re-think re-design
     
 
  -->
@@ -336,12 +338,13 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
 
 
     /* TODO 
-       [ ] undo/redo traversal
-       [ ] key command capture
-       [ ] state change truncates stack
+       [x] undo/redo traversal
+       [x] key command capture
+       [x] state change truncates stack
        [ ] stack length limit
        [ ] cursor preservation
     */
+
     var HISTORY = []
     var HIDX = 0
 
@@ -350,40 +353,28 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       if (HISTORY[HIDX] != s) {
         HISTORY = HISTORY.slice(0, HIDX+1)
         HISTORY.push(s)
-        HIDX = HISTORY.length-1
-      }
-    }
+        HIDX = HISTORY.length-1}}
 
     function HistoryUndo(){
+      HistoryRecordState() // due to interval recording there might be changes
       if (HIDX > 0) {
         HIDX -= 1
-        document.querySelector("note").innerHTML = HISTORY[HIDX]
-      }
-    }
+        document.querySelector("note").innerHTML = HISTORY[HIDX]}}
 
     function HistoryRedo(){
       if (HIDX < HISTORY.length-1) {
         HIDX += 1
-        document.querySelector("note").innerHTML = HISTORY[HIDX]
-      }
-    }
+        document.querySelector("note").innerHTML = HISTORY[HIDX]}}
 
-    // just want these to be the last registered events, can move to end of script area at some point
-    window.addEventListener("load", (event) => {
-      document.querySelector("note").addEventListener("keydown", (e) => {
-        if (e.key === "z" && e.ctrlKey === true) {
-          e.preventDefault()
-          HistoryUndo()
-        }
-        if (e.key === "y" && e.ctrlKey === true) {
-          e.preventDefault()
-          HistoryRedo()
-        }
-      })
+    document.querySelector("note").addEventListener("keydown", (e) => {
+      if (e.key === "z" && e.ctrlKey === true) {
+        e.preventDefault()
+        HistoryUndo()}
+      if (e.key === "y" && e.ctrlKey === true) {
+        e.preventDefault()
+        HistoryRedo()}})
 
-      document.querySelector("note").addEventListener("keyup", ()=>HistoryRecordState(), false)
-      setInterval(()=>HistoryRecordState(), 1000)
-    })
+    setInterval(()=>HistoryRecordState(), 1000)
 
 
 
