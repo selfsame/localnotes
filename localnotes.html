@@ -23,8 +23,6 @@ TODO
 
 [x] document title
 
-[ ] more managable block, cursor, and lint system?
-
 [ ] contentEditable changes sanitize dom
     [ ] greenlist of top level elements, strip everything else
     [ ] selection styling (bold, italic). I actually think there's contenteditable commands to apply these things?
@@ -49,20 +47,21 @@ TODO
 BUGS
 
 [x] figure out why undo isn't working after paste (probably need my own todo stack)
-[ ] pasting blocks isn't working, are custom tag names not supported with that? 
+[x] pasting blocks isn't working, are custom tag names not supported with that? 
 [x] indent should be pixel based so different font sizes line up
 [x] start of line command parsing can trigger when right after a <br> (can't reproduce anymore)
-[ ] bug with deletion ops where some text after the cursor dissapears when deleting a selection, probably confused about the depth of the end node
-    [ ] having working undo would really help here
+[x] bug with deletion ops where some text after the cursor dissapears when deleting a selection, probably confused about the depth of the end node
+    [x] having working undo would really help here
 [x] new lining from an h1 is doing the backwards text entry thing (cursor is between top level blocks) - probably need a generic lint step that repositions cursors like that
-[ ] arrow key navigation is weird, will skip blocks depending on text alignment??
-[ ] firefox - when deleting text in a todo it will often place cursor in previous block when all text is deleted (only todo)
-[ ] chrome - 'enter' on empty todo creates two new ones. AFAIK todo has a special bit of code to create new ones so maybe element splitting is actually working in chrome - maybe a better fix for this is to use a <div class="todo"> instead of a <todo>
-[ ] chrome - /h1 can not place cursor in h1 when at end of block range?
+[x] arrow key navigation is weird, will skip blocks depending on text alignment?? (think this was a side effect of <todo> display/position settings)
+[x] firefox - when deleting text in a todo it will often place cursor in previous block when all text is deleted (only todo)
+[x] chrome - 'enter' on empty todo creates two new ones. AFAIK todo has a special bit of code to create new ones so maybe element splitting is actually working in chrome - maybe a better fix for this is to use a <div class="todo"> instead of a <todo>
+[x] chrome - /h1 can not place cursor in h1 when at end of block range?
+[ ] block conversion should strip block signifying classes like 'todo' 
 
 Today's project
 [ ] I'm in need of a debug section that shows the current range with live update
-[ ] deletion ops is very broken, could probably use a complete re-think re-design
+[x] deletion ops is very broken, could probably use a complete re-think re-design
     
 
  -->
@@ -143,6 +142,43 @@ Today's project
       display: block;
     }
 
+
+
+    li {
+      padding-left: 24px;
+    }
+    li::marker {
+      padding-left: 24px;
+    }
+
+    .todo {
+      display: block;
+      margin: 0.2em 0;
+      line-height: 1em;
+      text-indent: -1.8em;
+      padding-left: 1.8em;
+      pointer-events: none;
+    }
+
+    .todo::before {
+      content: '';
+      display: inline-block;
+      width: 1.2em;
+      height: 1.2em;
+      margin-right: 0.5em;
+      position: relative;
+      top: 0.25em;
+      box-sizing: border-box;
+      border-radius: 2px;
+      border: 3px solid #3a8dec;
+      cursor: pointer;
+      pointer-events: auto;
+    }
+
+    .todo.checked::before {
+      background: #3a8dec;
+    }
+
     /* s = "";for (i = 1; i <= 20; i++) {s += `.indent${i} {margin-left: ${i*24}px;}\n`}; console.log(s)   */
     .indent1 {margin-left: 24px;}
     .indent2 {margin-left: 48px;}
@@ -164,41 +200,6 @@ Today's project
     .indent18 {margin-left: 432px;}
     .indent19 {margin-left: 456px;}
     .indent20 {margin-left: 480px;}
-
-    li {
-      padding-left: 24px;
-    }
-    li::marker {
-      padding-left: 24px;
-    }
-
-    todo {
-      display: block;
-      margin: 0.2em 0;
-      line-height: 1em;
-      text-indent: -1.8em;
-      padding-left: 1.8em;
-      pointer-events: none;
-    }
-
-    todo::before {
-      content: '';
-      display: inline-block;
-      width: 1.2em;
-      height: 1.2em;
-      margin-right: 0.5em;
-      position: relative;
-      top: 0.25em;
-      box-sizing: border-box;
-      border-radius: 2px;
-      border: 3px solid #3a8dec;
-      cursor: pointer;
-      pointer-events: auto;
-    }
-
-    todo.checked::before {
-      background: #3a8dec;
-    }
 
     note * {
       outline: 1px solid rgba(255, 0, 0, 0.199);
@@ -388,15 +389,27 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       hr: {shortcode: "/hr", tagName: "HR", vdom: ['hr']},
       img: {shortcode: "/img", tagName: "IMG", vdom: ['img']},
       li: {shortcode: "* ", tagName: "LI", vdom: ['li']},
-      todo: {shortcode: "[] ", tagName: "TODO", vdom: ['todo', {onclick: 'this.classList.toggle("checked")'}]}
+      todo: {shortcode: "[] ", tagName: "DIV", vdom: ['div.todo', {onclick: 'this.classList.toggle("checked")'}]}
     }
 
     const block_tags = Object.entries(block_defs).map(([k,v])=>v.tagName)
 
+    function ValidBlockType(node){
+      if (block_tags.includes(node.tagName)) {
+        if (node.tagName === "DIV") {
+          if (node.classList.contains("todo")) {
+            return true
+          }
+        } else {
+          return true
+        }
+      }
+    }
+
     // block manipulation
 
     function IsBlock(el){
-      return ['P', 'IMG', 'DIV', 'TODO'].includes(el.tagName)
+      return ['P', 'IMG', 'DIV'].includes(el.tagName)
     }
 
     function IsText(el){
@@ -485,8 +498,8 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       el = document.querySelector("note")
       console.log(el.innerHTML)
       for (node of el.children){
-
-        if (!block_tags.includes(node.tagName)) {
+        // TODO need to only keep special divs like div.todo, need a better check here
+        if (!ValidBlockType(node)) {
           node = ReplaceNode(node, Render(['p']))
         }
         while (node.previousSibling && node.previousSibling.nodeName === "#text") {
@@ -506,33 +519,6 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       console.log(el.innerHTML)
     }
 
-
-    function SplitBlockAtSelection() {
-      let r = CurrentRange()
-      if (r && r.collapsed) {
-        let block = r.startContainer.nodeName === "#text" ? r.startContainer.parentNode : r.startContainer
-        let idx = r.startOffset
-        // todo if in a text node should split that into two
-        let temp = Render(['div'])
-        temp.innerHTML = block.outerHTML
-        duplicate = temp.children[0]
-        duplicate.innerHTML = ""
-        for (let i = block.childNodes.length-1; i >= 0 ; i--) {
-          let el = block.childNodes[i];
-          if (i >= idx) {
-            duplicate.prepend(el)
-          } else if (i == idx - 1 && el.nodeName === "BR") {
-            block.removeChild(el)
-          }
-        }
-        duplicate.classList.remove("checked")
-        block.parentNode.insertBefore(duplicate, block.nextSibling)
-
-        PlaceCursor(duplicate, 0)
-
-      }
-    }
-
     function OPIndent(n){
       for (el of SelectedElements()) {
         let level = 0
@@ -547,52 +533,6 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       }
     }
 
-
-
-    function OPDelete(e){
-      let r = CurrentRange()
-      // figure out if I'm at the beginning of a block
-      if ((IsText(r.startContainer) 
-           && IsBlock(r.startContainer.parentNode) 
-           && !r.startContainer.previousSibling
-           && r.startOffset == 0)
-          || (IsBlock(r.startContainer) && r.startOffset == 0)){
-        let block = IsBlock(r.startContainer) ? r.startContainer : r.startContainer.parentNode
-        // delete at start converts other block types to a paragraph
-        console.log("block:", block)
-        if (block.tagName != "P") {
-          let el = ReplaceNode(block, Render(['p', {class: block.className}]))
-          PlaceCursor(el, 0)
-          e.preventDefault()
-        } else {
-          let before = block.previousSibling
-          if (before) {
-            let before_child_cnt = before.childNodes.length
-            block.childNodes.forEach((e)=>{before.appendChild(e)})
-            block.parentNode.removeChild(block)
-            PlaceCursor(before, before_child_cnt)
-            e.preventDefault()
-          }
-        }
-
-        
-      }
-      // if selection isn't collapsed and is in two different blocks then
-      // deleteContents and merge the two blocks around the cursor
-      if (!r.collapsed && r.startContainer != r.endContainer) {
-        r.deleteContents()
-        r = CurrentRange()
-        let before = r.startContainer.childNodes[r.startOffset-1]
-        let after = r.startContainer.childNodes[r.startOffset]
-        if (before && after){
-          let before_child_cnt = before.childNodes.length
-          after.childNodes.forEach((e)=>{before.appendChild(e)})
-          after.parentNode.removeChild(after)
-          PlaceCursor(before, before_child_cnt)
-        }
-        e.preventDefault()
-      }
-    }
 
 
 
@@ -647,9 +587,6 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
         e.preventDefault()
         OPIndent(e.shiftKey ? -1 : 1)
       }
-      if (e.key === "Backspace") {
-        OPDelete(e)
-      }
       SyncContent()
     })
 
@@ -665,17 +602,13 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
             let block = text.parentNode
             text.textContent = text.textContent.slice(v.shortcode.length)
             let el = ReplaceNode(block, Render(v.vdom))
-            el.setAttribute("class", block.className)
+            block.classList.forEach((s)=>el.classList.add(s))
             PlaceCursor(el, 0)
           }
         }
         
       }
-      if (e.code === "Enter" && !e.shiftKey) {
-        if (['TODO'].includes(CurrentRange().startContainer.nodeName)){
-          SplitBlockAtSelection()
-        }
-      }
+
       SyncContent()
     })
 
@@ -689,4 +622,3 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
 </body>
 
 </html>
-
