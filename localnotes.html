@@ -26,9 +26,16 @@ TODO
 [ ] contentEditable changes sanitize dom
     [ ] greenlist of top level elements, strip everything else
     [ ] selection styling (bold, italic). I actually think there's contenteditable commands to apply these things?
+
+[ ] Insertion Points
+    [ ] find closest block to the cursor
+    [ ] easy if under cursor
+    [ ] use `elementFromPoint` to find neightbors in 4 directions
+    
 [ ] drag and drop restructuring
     [ ] generic system, will use in sidebar and document
     [ ] configure hotspots for drop before, inside, after, left, right
+    [ ] protocol style actions for insertion
 [ ] insert context menu
 [ ] slash, todo, and bullet list inference at start of top level element
 [ ] key commands
@@ -45,23 +52,20 @@ TODO
 [ ] history should preserve per document during a session
 
 BUGS
-
-[x] figure out why undo isn't working after paste (probably need my own todo stack)
-[x] pasting blocks isn't working, are custom tag names not supported with that? 
-[x] indent should be pixel based so different font sizes line up
-[x] start of line command parsing can trigger when right after a <br> (can't reproduce anymore)
-[x] bug with deletion ops where some text after the cursor dissapears when deleting a selection, probably confused about the depth of the end node
-    [x] having working undo would really help here
-[x] new lining from an h1 is doing the backwards text entry thing (cursor is between top level blocks) - probably need a generic lint step that repositions cursors like that
-[x] arrow key navigation is weird, will skip blocks depending on text alignment?? (think this was a side effect of <todo> display/position settings)
-[x] firefox - when deleting text in a todo it will often place cursor in previous block when all text is deleted (only todo)
-[x] chrome - 'enter' on empty todo creates two new ones. AFAIK todo has a special bit of code to create new ones so maybe element splitting is actually working in chrome - maybe a better fix for this is to use a <div class="todo"> instead of a <todo>
-[x] chrome - /h1 can not place cursor in h1 when at end of block range?
-[ ] block conversion should strip block signifying classes like 'todo' 
+[ ] new block in header doesn't preserve indent. Might need to lint new blocks as todo needs it's checked cleared too
+[ ] pasting sticks content inside of a block, not even sure of the desired behaviour here, maybe
+    contents should be 'children' only in so far as having the parent's indentation
+[ ] <img> are really hard to edit around, should these be wrapped in a div or something?
+[ ] 'li' has different positioning in chrome vs firefox
 
 Today's project
 [ ] I'm in need of a debug section that shows the current range with live update
-[x] deletion ops is very broken, could probably use a complete re-think re-design
+[ ] indexedDB & localStorage interface
+    [x] switch localstorage calls to callbacks
+[x] drop images in note
+
+
+
     
 
  -->
@@ -142,13 +146,13 @@ Today's project
       display: block;
     }
 
-
+    h1,h2,h3,h4,p,li {
+      min-height: 1em;
+    }
 
     li {
-      padding-left: 24px;
-    }
-    li::marker {
-      padding-left: 24px;
+      left: 14px;
+      position: relative;
     }
 
     .todo {
@@ -203,6 +207,10 @@ Today's project
 
     note * {
       outline: 1px solid rgba(255, 0, 0, 0.199);
+    }
+
+    .insertion {
+      outline: 4px solid #b477b1;
     }
 
     /* note *::before, note *::after {
@@ -277,6 +285,23 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
             el.appendChild(cnode)}})
         return el}}
 
+    // Storage stuff
+    // will use IndexedDB when available, hence the asyncronicity
+    function PutItem(k, o){
+      localStorage.setItem(k, JSON.stringify(o))
+    }
+
+    function GetItem(k, f){
+      f(JSON.parse(localStorage.getItem(k)))
+    }
+
+    function DeleteItem(k){
+      localStorage.removeItem(k)
+    }
+
+    function StorageItems(f){
+      f(Object.entries(localStorage))
+    }
 
     // Note file stuff    
 
@@ -286,7 +311,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
 
     function SaveNote(note) {
       note.edited = new Date()
-      localStorage.setItem(note.uid, JSON.stringify(note))
+      PutItem(note.uid, note)
     }
 
     function NewNote() {
@@ -309,23 +334,25 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
         meta.current_note = null
         document.querySelector("document").classList.add("hidden")
       } else {
-        note = JSON.parse(localStorage.getItem(uid))
-        meta.current_note = note.uid
-        document.querySelector("document").classList.remove("hidden")
-        document.querySelector("#title").textContent = note.title
-        document.querySelector("note").innerHTML = note.content
+        GetItem(uid, (o)=>{
+          note = o
+          meta.current_note = note.uid
+          document.querySelector("document").classList.remove("hidden")
+          document.querySelector("#title").textContent = note.title
+          document.querySelector("note").innerHTML = note.content
+          HistoryRecordState()
+          SaveMeta()
+        })
       }
       HISTORY = []
       HIDX = 0
-      HistoryRecordState()
-      SaveMeta()
     }
 
     function DeleteNote(uid){
       if (note.uid == uid) {
         OpenNote(null)
       }
-      localStorage.removeItem(uid)
+      DeleteItem(uid)
     }
 
     function SyncContent() {
@@ -406,11 +433,11 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       }
     }
 
-    // block manipulation
-
-    function IsBlock(el){
-      return ['P', 'IMG', 'DIV'].includes(el.tagName)
+    function StripBlockClasses(s){
+      return (s || "").replaceAll(/todo/g, "")
     }
+
+    // block manipulation
 
     function IsText(el){
       return el.nodeName === "#text"
@@ -534,41 +561,76 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     }
 
 
-
+    function OPDelete(e){
+      let r = CurrentRange()
+      // figure out if I'm at the beginning of a block - I think this is broken a bit
+      if ((IsText(r.startContainer) 
+           && ValidBlockType(r.startContainer.parentNode) 
+           && !r.startContainer.previousSibling
+           && r.startOffset == 0)
+          || (ValidBlockType(r.startContainer) && r.startOffset == 0)){
+        let block = ValidBlockType(r.startContainer) ? r.startContainer : r.startContainer.parentNode
+        // delete at start converts other block types to a paragraph
+        console.log("block:", block)
+        if (block.tagName != "P") {
+          let el = ReplaceNode(block, Render(['p', {class: StripBlockClasses(block.className)}]))
+          PlaceCursor(el, 0)
+          e.preventDefault()
+        }  
+      }
+    }
 
 
 
 
     function RenderSidebar() {
-      document.querySelector('sidebar content').replaceChildren(
-        Render(
-          ['div',
-            ['button', {onclick: (e)=>{OpenNote(NewNote().uid); RenderSidebar()}}, "+ new note"],
-            ['div.note-list'].concat(
-              Object.entries(localStorage).map(([k,v])=>{
-                try {
-                  if (k != 'meta') {
-                    var o = JSON.parse(v)
-                    return ['p', {onclick: (e)=>OpenNote(k)}, o.title,
-                            ['button', {onclick: (e)=>{
-                              e.stopPropagation()
-                              if (confirm(`Delete note "${o.title}"`)){
-                                DeleteNote(k)
-                                RenderSidebar()
-                              }
-                            }}, 'x']]}
-                } catch (error) {
-                  console.error(error)}}))]))}
+      StorageItems((xs)=>{
+        let notes = xs.map(([k,v])=>[k,JSON.parse(v)]).sort(function([_a,a],[_b,b]){
+          return new Date(a.created || "2000-01-01") - new Date(b.created || "2000-01-01")
+        })
+        document.querySelector('sidebar content').replaceChildren(
+          Render(
+            ['div',
+              ['button', {onclick: (e)=>{OpenNote(NewNote().uid); RenderSidebar()}}, "+ new note"],
+              ['div.note-list'].concat(
+                notes.map(([k,o])=>{
+                  try {
+                    if (k != 'meta') {
+                      return ['p', {onclick: (e)=>OpenNote(k)}, o.title,
+                              ['button', {onclick: (e)=>{
+                                e.stopPropagation()
+                                if (confirm(`Delete note "${o.title}"`)){
+                                  DeleteNote(k)
+                                  RenderSidebar()
+                                }
+                              }}, 'x']]}
+                  } catch (error) {
+                    console.error(error)}}))]))})}
 
 
 
-
-
-
-
-
+    // Insertion stuff
     
+    function BRectDistance(rect, x, y) {
+      var dx = Math.max(rect.left - x, 0, x - rect.right);
+      var dy = Math.max(rect.top - y, 0, y - rect.bottom);
+      return Math.sqrt(dx*dx + dy*dy);
+    }
 
+    function ClosestChild(el, x, y) {
+      let nodes = [... el.childNodes]
+      nodes.sort((a, b)=> BRectDistance(a.getBoundingClientRect(), x, y) - BRectDistance(b.getBoundingClientRect(), x, y))
+      return nodes[0]
+    }
+
+    document.onmousemove = (e) => {
+      document.querySelectorAll(".insertion").forEach((el)=>el.classList.remove("insertion"))
+
+      let closest = ClosestChild(document.querySelector("note"), e.clientX, e.clientY)
+      if (closest) {
+        closest.classList.add("insertion")
+      }
+    }
 
                 
     document.querySelector("note").addEventListener("input", ()=>{LintNote(); SyncContent()}, false)
@@ -587,10 +649,11 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
         e.preventDefault()
         OPIndent(e.shiftKey ? -1 : 1)
       }
+      if (e.key === "Backspace") {
+        OPDelete(e)
+      }
       SyncContent()
     })
-
-    
 
     document.querySelector("note").addEventListener("keyup", (e) => {
       console.log("keyup")
@@ -602,15 +665,29 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
             let block = text.parentNode
             text.textContent = text.textContent.slice(v.shortcode.length)
             let el = ReplaceNode(block, Render(v.vdom))
+            block.setAttribute("class", StripBlockClasses(block.getAttribute("class")))
             block.classList.forEach((s)=>el.classList.add(s))
             PlaceCursor(el, 0)
           }
         }
-        
       }
 
       SyncContent()
     })
+
+    document.querySelector("note").addEventListener("drop", (e)=>{
+      [... e.dataTransfer.files].forEach((file, i) => {
+        if(file.type.startsWith("image")){
+          let reader = new FileReader()
+          reader.onload = function (event) {
+            document.querySelector("note").appendChild(Render(['img', {"src": event.target.result}]))
+          }
+        reader.readAsDataURL(file);
+        e.preventDefault()
+        }
+      })
+      
+    }, false)
 
     var meta = JSON.parse(localStorage.getItem('meta')) || {current_note: null}
 
