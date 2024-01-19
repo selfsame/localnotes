@@ -39,6 +39,9 @@ TODO
 [ ] insert context menu
 [ ] slash, todo, and bullet list inference at start of top level element
 [ ] key commands
+[ ] linking
+    [ ] 'note' links, show page title, have uid
+    [ ] content editing strategy for links, can't edit the text, can delete (maybe if inside a selection)
 
 [ ] emoji picker
 [ ] 'file structure' graph in meta
@@ -57,12 +60,26 @@ BUGS
     contents should be 'children' only in so far as having the parent's indentation
 [ ] <img> are really hard to edit around, should these be wrapped in a div or something?
 [ ] 'li' has different positioning in chrome vs firefox
+[ ] pasting blocks picks up style as inline, which breaks things
 
 Today's project
 [ ] I'm in need of a debug section that shows the current range with live update
 [ ] indexedDB & localStorage interface
     [x] switch localstorage calls to callbacks
 [x] drop images in note
+
+[ ] drag and drop blocks
+    [x] draw CSS drag handle on every element
+    [x] detect drag is over handle
+    [x] handle shows up on hover 
+        [ ] and selection
+    [x] insertion tracking shows up only during handle drag
+    [x] store 'selected' elements during drag
+    [ ] drag img has all selected elements
+    [ ] dragged elements have low opacity
+    [ ] drag can be cancelled, either dropping outside of note or on top of one of the dragged elements
+    [/] insertion has 'in', 'before', 'after', 'left', 'right' detection
+    [x] drop inserts selected elements
 
 
 
@@ -128,6 +145,10 @@ Today's project
       top: 0px;
       bottom: 0px;
       right: 0px;
+      padding: 1em;
+    }
+
+    note {
       padding: 1em;
     }
 
@@ -205,12 +226,34 @@ Today's project
     .indent19 {margin-left: 456px;}
     .indent20 {margin-left: 480px;}
 
-    note * {
+    /* note * {
       outline: 1px solid rgba(255, 0, 0, 0.199);
+    } */
+
+    .insertion.ibefore {
+      border: 0px solid #b477b1;
+      border-top-width: 4px;
+    }
+    .insertion.iafter, .insertion {
+      border: 0px solid #b477b1;
+      border-bottom-width: 4px;
     }
 
-    .insertion {
-      outline: 4px solid #b477b1;
+    note > * {
+      position: relative;
+    }
+    note > *.selected::after {
+      content: '';
+      display: block;
+      position: absolute;
+      left: -16px;
+      top: 0em;
+      width: 12px;
+      border-right: 4px solid white;
+      height: 100%;
+      cursor: grab;
+      pointer-events: auto;
+      background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAABbmlDQ1BpY2MAACiRdZG9S0JhFIcftTDKkFAiosHBokEhCqKxbHCREDPIatHrV+DH5V4lpDVoaRAaopa+hv6DWoPWgiAogojG5r6WkNu5Kiih5/Le8/B7z+9w7rlgDeWUvN4zD/lCSYsEA57V2JrH/o4FF26GGYoruroQDofoGj+PUi3x4Dd7da/rGAPJlK6ApU94VlG1krBMQ2irpJq8J+xWsvGk8ImwT5MBhW9NPdHgN5MzDf4yWYtGFsFq9vRk2jjRxkpWywtPCnvzubLSnMf8EkeqsLIseVTOGDoRggTwkKDMJjlK+CUXZGedfVN13xJF8SjyVqmgiSNDVrw+UcvSNSU5LXpKnhwVc+//96mnZ6Yb3R0B6H01jM9xsO9DrWoYv6eGUTsD2wtcF1r+ouxp7lv0akvzHoNzBy5vWlriAK52YeRZjWvxumSTY02n4eMCBmPguof+9caumvecP0F0W37RHRwewYTUOzf+AOECZ/uSmLScAAAACXBIWXMAAC4jAAAuIwF4pT92AAAAKklEQVQIW2P8DwQMSIAJxG5oaGA4cuQIRBikYvv27f/fv38PYv5nRNcCAFvgGrGltVmQAAAAAElFTkSuQmCC)
     }
 
     /* note *::before, note *::after {
@@ -237,7 +280,7 @@ Today's project
   </sidebar>
   <document>
     <h1 id="title" contenteditable="true">title</h1>
-    <note contenteditable="true"></note>
+    <note draggable="true" contenteditable="true" ></note>
   </document>
 
   <!-- https://unicode.org/emoji/charts-12.0/emoji-style.html
@@ -609,8 +652,20 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
 
 
 
+
+    // track blocks under mouse and under selection. Should probably also detect 'child' indentation blocks
+
+    document.querySelector("note").onmousemove = e => {
+      // TODO get top level block
+      document.querySelectorAll(".target").forEach((el)=>el.classList.remove("target"))
+      document.querySelectorAll(".selected").forEach((el)=>el.classList.remove("selected"))
+      e.target.classList.add("target")
+      e.target.classList.add("selected")
+    }
+
     // Insertion stuff
-    
+    INSERTING = false
+
     function BRectDistance(rect, x, y) {
       var dx = Math.max(rect.left - x, 0, x - rect.right);
       var dy = Math.max(rect.top - y, 0, y - rect.bottom);
@@ -623,14 +678,62 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       return nodes[0]
     }
 
-    document.onmousemove = (e) => {
-      document.querySelectorAll(".insertion").forEach((el)=>el.classList.remove("insertion"))
-
-      let closest = ClosestChild(document.querySelector("note"), e.clientX, e.clientY)
-      if (closest) {
-        closest.classList.add("insertion")
+    document.ondragover = (e) => {
+      if (INSERTING) {
+        document.querySelectorAll(".insertion").forEach((el)=>{
+          el.classList.remove("insertion")
+          el.classList.remove("ibefore")
+          el.classList.remove("iafter")
+        })
+        let closest = ClosestChild(document.querySelector("note"), e.clientX, e.clientY)
+        if (closest) {
+          closest.classList.add("insertion")
+          let bounds = closest.getBoundingClientRect()
+          if (e.clientY < bounds.top+4) {
+            closest.classList.add("ibefore")
+          } else if (e.clientY > bounds.bottom-4) {
+            closest.classList.add("iafter")
+          } 
+        }
       }
     }
+
+    document.querySelector("note").ondragstart = e => {
+      console.log(e)
+      let target = document.querySelector(".target")
+      if (target && ValidBlockType(target)){
+        let bounds = target.getBoundingClientRect()
+        let x = e.clientX
+        let y = e.clientY
+        if (bounds.left - 20 < x < bounds.left - 4 && bounds.top < y < bounds.bottom) {
+          INSERTING = document.querySelectorAll(".selected")
+          e.dataTransfer.setDragImage(target, 0, 0);
+          return
+        }
+      }
+      e.preventDefault()
+    }
+
+    document.querySelector("note").ondragend = e => {
+      let point = document.querySelector(".insertion")
+      if (INSERTING && point) {
+        INSERTING.forEach(el => {
+          el.parentNode.removeChild(el)
+          if (point.classList.contains("ibefore")) {
+            point.before(el)
+          } else {
+            point.after(el)
+          }
+        })
+      }
+      document.querySelectorAll(".insertion").forEach((el)=>el.classList.remove("insertion"))
+      INSERTING = false
+    }
+    document.querySelector("note").ondrop = e => {
+      e.preventDefault()
+    }
+
+
 
                 
     document.querySelector("note").addEventListener("input", ()=>{LintNote(); SyncContent()}, false)
