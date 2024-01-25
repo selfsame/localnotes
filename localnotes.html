@@ -61,6 +61,14 @@ BUGS
 [ ] <img> are really hard to edit around, should these be wrapped in a div or something?
 [ ] 'li' has different positioning in chrome vs firefox
 [ ] pasting blocks picks up style as inline, which breaks things
+[x] drag block is covering up li bullet point
+[x] block dragged to original position dissapears
+[x] drag insertion point uses border which jostles position a bit
+[ ] selection/insertion is triggering history states
+[x] bug moving h1 to end of document
+[x] hover target needs to bubble up
+[x] order of selection needs to be preserved?
+[ ] todo blocks need mouse events for more than just the checkbox (should check bounds on the rect for toggling it)
 
 Today's project
 [ ] I'm in need of a debug section that shows the current range with live update
@@ -72,14 +80,16 @@ Today's project
     [x] draw CSS drag handle on every element
     [x] detect drag is over handle
     [x] handle shows up on hover 
-        [ ] and selection
+        [x] and selection
     [x] insertion tracking shows up only during handle drag
     [x] store 'selected' elements during drag
-    [ ] drag img has all selected elements
-    [ ] dragged elements have low opacity
-    [ ] drag can be cancelled, either dropping outside of note or on top of one of the dragged elements
+    [x] drag img has all selected elements
+    [x] dragged elements have low opacity
+    [/] drag can be cancelled, either dropping outside of note or on top of one of the dragged elements
     [/] insertion has 'in', 'before', 'after', 'left', 'right' detection
     [x] drop inserts selected elements
+    [x] collapsed cursor selection shouldn't trigger 'selected'?
+
 
 
 
@@ -230,13 +240,20 @@ Today's project
       outline: 1px solid rgba(255, 0, 0, 0.199);
     } */
 
-    .insertion.ibefore {
-      border: 0px solid #b477b1;
+    .insertion::after {
+      content: '';
+      display: block;
+      position: absolute;
+      width: 100%;
+      height: 0px;
+      border: 0px solid #3a8dec;
       border-top-width: 4px;
     }
-    .insertion.iafter, .insertion {
-      border: 0px solid #b477b1;
-      border-bottom-width: 4px;
+    .insertion.ibefore::after {
+      top: -10px;
+    }
+    .insertion::after, .insertion.iafter::after {
+      bottom: -10px;
     }
 
     note > * {
@@ -254,6 +271,14 @@ Today's project
       cursor: grab;
       pointer-events: auto;
       background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAABbmlDQ1BpY2MAACiRdZG9S0JhFIcftTDKkFAiosHBokEhCqKxbHCREDPIatHrV+DH5V4lpDVoaRAaopa+hv6DWoPWgiAogojG5r6WkNu5Kiih5/Le8/B7z+9w7rlgDeWUvN4zD/lCSYsEA57V2JrH/o4FF26GGYoruroQDofoGj+PUi3x4Dd7da/rGAPJlK6ApU94VlG1krBMQ2irpJq8J+xWsvGk8ImwT5MBhW9NPdHgN5MzDf4yWYtGFsFq9vRk2jjRxkpWywtPCnvzubLSnMf8EkeqsLIseVTOGDoRggTwkKDMJjlK+CUXZGedfVN13xJF8SjyVqmgiSNDVrw+UcvSNSU5LXpKnhwVc+//96mnZ6Yb3R0B6H01jM9xsO9DrWoYv6eGUTsD2wtcF1r+ouxp7lv0akvzHoNzBy5vWlriAK52YeRZjWvxumSTY02n4eMCBmPguof+9caumvecP0F0W37RHRwewYTUOzf+AOECZ/uSmLScAAAACXBIWXMAAC4jAAAuIwF4pT92AAAAKklEQVQIW2P8DwQMSIAJxG5oaGA4cuQIRBikYvv27f/fv38PYv5nRNcCAFvgGrGltVmQAAAAAElFTkSuQmCC)
+    }
+
+    note > li.selected::after {
+      left: -29px;
+    }
+
+    note.dragging .selected {
+      opacity: 0.5;
     }
 
     /* note *::before, note *::after {
@@ -457,7 +482,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       h3: {shortcode: "/h3", tagName: "H3", vdom: ['h3']},
       h4: {shortcode: "/h4", tagName: "H4", vdom: ['h4']},
       hr: {shortcode: "/hr", tagName: "HR", vdom: ['hr']},
-      img: {shortcode: "/img", tagName: "IMG", vdom: ['img']},
+      //img: {shortcode: "/img", tagName: "IMG", vdom: ['img']},
       li: {shortcode: "* ", tagName: "LI", vdom: ['li']},
       todo: {shortcode: "[] ", tagName: "DIV", vdom: ['div.todo', {onclick: 'this.classList.toggle("checked")'}]}
     }
@@ -520,10 +545,18 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
         el = el.parentNode}
       return el}
 
+    // bubble up until a valid block is found
+    function BubbledBlock(el){
+      while (!ValidBlockType(el) && el.parentNode) {
+        el = el.parentNode}
+      if (ValidBlockType(el)) {return el}
+    }
+
     // this should be a list of 'shallow' siblings that have the selection intersecting them
     // 1. find the common ancestor
     // 2. for start and end find the ancestor inside the common (so 1 level deep), these will be siblings
     // 3. iterate via nextSibling to get the list
+    // Should this include indent children?
     function SelectedElements(){
       res = []
       r = CurrentRange()
@@ -540,7 +573,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
         }
       }
       res = res.map((n)=> n.nodeName === "#text" ? n.parentNode : n)
-      return res.distinct()
+      return res.distinct().filter(e=>e != document.querySelector("note"))
     }
 
     function SaveSelection(){
@@ -659,8 +692,16 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       // TODO get top level block
       document.querySelectorAll(".target").forEach((el)=>el.classList.remove("target"))
       document.querySelectorAll(".selected").forEach((el)=>el.classList.remove("selected"))
-      e.target.classList.add("target")
-      e.target.classList.add("selected")
+      let target = BubbledBlock(e.target)
+      if (target) {
+        target.classList.add("target")
+        target.classList.add("selected")
+      }
+      let r = CurrentRange()
+      if (r && !r.collapsed) {
+        for (e of SelectedElements()) {
+          e.classList.add("selected")
+        }}
     }
 
     // Insertion stuff
@@ -673,7 +714,12 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     }
 
     function ClosestChild(el, x, y) {
-      let nodes = [... el.childNodes]
+      let nodes = []
+      for (e of el.childNodes) {
+        if (!e.classList.contains("selected")) {
+          nodes.push(e)
+        }
+      }
       nodes.sort((a, b)=> BRectDistance(a.getBoundingClientRect(), x, y) - BRectDistance(b.getBoundingClientRect(), x, y))
       return nodes[0]
     }
@@ -699,15 +745,15 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     }
 
     document.querySelector("note").ondragstart = e => {
-      console.log(e)
+      document.querySelector("note").classList.add("dragging")
       let target = document.querySelector(".target")
       if (target && ValidBlockType(target)){
         let bounds = target.getBoundingClientRect()
         let x = e.clientX
         let y = e.clientY
         if (bounds.left - 20 < x < bounds.left - 4 && bounds.top < y < bounds.bottom) {
-          INSERTING = document.querySelectorAll(".selected")
-          e.dataTransfer.setDragImage(target, 0, 0);
+          INSERTING = [... document.querySelectorAll(".selected")]
+          e.dataTransfer.setDragImage(Render(["div", "hello"]), 0, 0);
           return
         }
       }
@@ -715,16 +761,21 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     }
 
     document.querySelector("note").ondragend = e => {
+      document.querySelector("note").classList.remove("dragging")
       let point = document.querySelector(".insertion")
-      if (INSERTING && point) {
-        INSERTING.forEach(el => {
-          el.parentNode.removeChild(el)
-          if (point.classList.contains("ibefore")) {
+      if (INSERTING && point && !INSERTING.includes(point)) {
+        if (point.classList.contains("ibefore")) {
+          INSERTING.forEach(el => {
+            el.parentNode.removeChild(el)
             point.before(el)
-          } else {
+          })
+        } else {
+          INSERTING.reverse()
+          INSERTING.forEach(el => {
+            el.parentNode.removeChild(el)
             point.after(el)
-          }
-        })
+          })
+        }
       }
       document.querySelectorAll(".insertion").forEach((el)=>el.classList.remove("insertion"))
       INSERTING = false
@@ -783,7 +834,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
         if(file.type.startsWith("image")){
           let reader = new FileReader()
           reader.onload = function (event) {
-            document.querySelector("note").appendChild(Render(['img', {"src": event.target.result}]))
+            document.querySelector("note").appendChild(Render(['p', ['img', {"src": event.target.result}]]))
           }
         reader.readAsDataURL(file);
         e.preventDefault()
