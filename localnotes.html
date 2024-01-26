@@ -27,10 +27,6 @@ TODO
     [ ] greenlist of top level elements, strip everything else
     [ ] selection styling (bold, italic). I actually think there's contenteditable commands to apply these things?
 
-[ ] Insertion Points
-    [ ] find closest block to the cursor
-    [ ] easy if under cursor
-    [ ] use `elementFromPoint` to find neightbors in 4 directions
     
 [ ] drag and drop restructuring
     [ ] generic system, will use in sidebar and document
@@ -61,14 +57,9 @@ BUGS
 [ ] <img> are really hard to edit around, should these be wrapped in a div or something?
 [ ] 'li' has different positioning in chrome vs firefox
 [ ] pasting blocks picks up style as inline, which breaks things
-[x] drag block is covering up li bullet point
-[x] block dragged to original position dissapears
-[x] drag insertion point uses border which jostles position a bit
 [ ] selection/insertion is triggering history states
-[x] bug moving h1 to end of document
-[x] hover target needs to bubble up
-[x] order of selection needs to be preserved?
 [ ] todo blocks need mouse events for more than just the checkbox (should check bounds on the rect for toggling it)
+[ ] chrome - when trying to drag a block that is partially range selected the selection collapses and it fails
 
 Today's project
 [ ] I'm in need of a debug section that shows the current range with live update
@@ -89,6 +80,9 @@ Today's project
     [/] insertion has 'in', 'before', 'after', 'left', 'right' detection
     [x] drop inserts selected elements
     [x] collapsed cursor selection shouldn't trigger 'selected'?
+    [ ] change 'target' and 'selection' from classes to a list of elements - this should some bugs with platform dragging and 
+        avoids issues with history saving changes to ephemeral classes
+        [ ] the handles should be their own nodes outside of the note that are positioned
 
 
 
@@ -687,6 +681,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
 
 
     // track blocks under mouse and under selection. Should probably also detect 'child' indentation blocks
+    addEventListener("mousemove", (e) => {window.X = e.clientX; window.Y = e.clientY})
 
     document.querySelector("note").onmousemove = e => {
       // TODO get top level block
@@ -710,7 +705,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     function BRectDistance(rect, x, y) {
       var dx = Math.max(rect.left - x, 0, x - rect.right);
       var dy = Math.max(rect.top - y, 0, y - rect.bottom);
-      return Math.sqrt(dx*dx + dy*dy);
+      return Math.sqrt(dx*dx + dy*dy)
     }
 
     function ClosestChild(el, x, y) {
@@ -745,22 +740,24 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     }
 
     document.querySelector("note").ondragstart = e => {
-      document.querySelector("note").classList.add("dragging")
+
       let target = document.querySelector(".target")
+      console.log(target)
       if (target && ValidBlockType(target)){
         let bounds = target.getBoundingClientRect()
-        let x = e.clientX
-        let y = e.clientY
-        if (bounds.left - 20 < x < bounds.left - 4 && bounds.top < y < bounds.bottom) {
+        if (bounds.left - 24 < X && X < bounds.left && bounds.top < Y && Y < bounds.bottom) {
+          document.querySelector("note").classList.add("dragging")
           INSERTING = [... document.querySelectorAll(".selected")]
           e.dataTransfer.setDragImage(Render(["div", "hello"]), 0, 0);
           return
         }
       }
       e.preventDefault()
+      e.stopPropagation()
     }
 
     document.querySelector("note").ondragend = e => {
+      console.log("DRAG END")
       document.querySelector("note").classList.remove("dragging")
       let point = document.querySelector(".insertion")
       if (INSERTING && point && !INSERTING.includes(point)) {
@@ -780,6 +777,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       document.querySelectorAll(".insertion").forEach((el)=>el.classList.remove("insertion"))
       INSERTING = false
     }
+
     document.querySelector("note").ondrop = e => {
       e.preventDefault()
     }
