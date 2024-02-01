@@ -83,6 +83,10 @@ Today's project
     [ ] change 'target' and 'selection' from classes to a list of elements - this should some bugs with platform dragging and 
         avoids issues with history saving changes to ephemeral classes
         [ ] the handles should be their own nodes outside of the note that are positioned
+        [x] reimplement the ondrag handler
+        [x] note should still have it's drag/drop prevented
+        [ ] single mouse target should get a handle too
+        [ ] SELECTION needs to include TARGET and be ordered correctly
 
 
 
@@ -253,26 +257,14 @@ Today's project
     note > * {
       position: relative;
     }
-    note > *.selected::after {
-      content: '';
-      display: block;
+
+    selection {
       position: absolute;
-      left: -16px;
-      top: 0em;
-      width: 12px;
-      border-right: 4px solid white;
-      height: 100%;
+      display: block;
       cursor: grab;
       pointer-events: auto;
       background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAABbmlDQ1BpY2MAACiRdZG9S0JhFIcftTDKkFAiosHBokEhCqKxbHCREDPIatHrV+DH5V4lpDVoaRAaopa+hv6DWoPWgiAogojG5r6WkNu5Kiih5/Le8/B7z+9w7rlgDeWUvN4zD/lCSYsEA57V2JrH/o4FF26GGYoruroQDofoGj+PUi3x4Dd7da/rGAPJlK6ApU94VlG1krBMQ2irpJq8J+xWsvGk8ImwT5MBhW9NPdHgN5MzDf4yWYtGFsFq9vRk2jjRxkpWywtPCnvzubLSnMf8EkeqsLIseVTOGDoRggTwkKDMJjlK+CUXZGedfVN13xJF8SjyVqmgiSNDVrw+UcvSNSU5LXpKnhwVc+//96mnZ6Yb3R0B6H01jM9xsO9DrWoYv6eGUTsD2wtcF1r+ouxp7lv0akvzHoNzBy5vWlriAK52YeRZjWvxumSTY02n4eMCBmPguof+9caumvecP0F0W37RHRwewYTUOzf+AOECZ/uSmLScAAAACXBIWXMAAC4jAAAuIwF4pT92AAAAKklEQVQIW2P8DwQMSIAJxG5oaGA4cuQIRBikYvv27f/fv38PYv5nRNcCAFvgGrGltVmQAAAAAElFTkSuQmCC)
-    }
-
-    note > li.selected::after {
-      left: -29px;
-    }
-
-    note.dragging .selected {
-      opacity: 0.5;
+    
     }
 
     /* note *::before, note *::after {
@@ -299,8 +291,10 @@ Today's project
   </sidebar>
   <document>
     <h1 id="title" contenteditable="true">title</h1>
-    <note draggable="true" contenteditable="true" ></note>
+    <note contenteditable="true" ></note>
   </document>
+  <selection draggable="true"></selection>
+  <selection draggable="true"></selection>
 
   <!-- https://unicode.org/emoji/charts-12.0/emoji-style.html
        res = []; document.querySelectorAll("a.plain").forEach((el)=>res.push(el.textContent)) -->
@@ -311,6 +305,8 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
   <script>
     const DOC_VERSION = 0;
     var note = null;
+    var TARGET = null;
+    var SELECTION = [];
 
     Array.prototype.distinct = function(){
       let res = []
@@ -567,7 +563,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
         }
       }
       res = res.map((n)=> n.nodeName === "#text" ? n.parentNode : n)
-      return res.distinct().filter(e=>e != document.querySelector("note"))
+      return res.distinct().filter(e=>document.querySelector("note").contains(e))
     }
 
     function SaveSelection(){
@@ -684,20 +680,39 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     addEventListener("mousemove", (e) => {window.X = e.clientX; window.Y = e.clientY})
 
     document.querySelector("note").onmousemove = e => {
+      
       // TODO get top level block
-      document.querySelectorAll(".target").forEach((el)=>el.classList.remove("target"))
-      document.querySelectorAll(".selected").forEach((el)=>el.classList.remove("selected"))
       let target = BubbledBlock(e.target)
-      if (target) {
-        target.classList.add("target")
-        target.classList.add("selected")
-      }
+      SELECTION = []
       let r = CurrentRange()
       if (r && !r.collapsed) {
         for (e of SelectedElements()) {
-          e.classList.add("selected")
+          SELECTION.push(e)
         }}
+      TARGET = target
+
+      let a = document.querySelectorAll("selection")[0]
+      let b = document.querySelectorAll("selection")[1]
+      if (SELECTION.length > 0) {
+        let b1 = SELECTION[0].getBoundingClientRect()
+        let b2 = SELECTION[SELECTION.length-1].getBoundingClientRect()
+        let groupb = SELECTION[0].parentNode.getBoundingClientRect()
+        a.style.left = `${groupb.left-12}px`
+        a.style.top = `${b1.top}px`
+        a.style.width = `24px`
+        a.style.height = `${b2.bottom-b1.top}px`
+      } else {
+        a.style.top = "-100px"
+        a.style.height = "0px"
+      }
     }
+
+
+
+
+
+
+
 
     // Insertion stuff
     INSERTING = false
@@ -711,7 +726,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     function ClosestChild(el, x, y) {
       let nodes = []
       for (e of el.childNodes) {
-        if (!e.classList.contains("selected")) {
+        if (!SELECTION.includes(e) && !(TARGET == e)) {
           nodes.push(e)
         }
       }
@@ -720,6 +735,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     }
 
     document.ondragover = (e) => {
+      
       if (INSERTING) {
         document.querySelectorAll(".insertion").forEach((el)=>{
           el.classList.remove("insertion")
@@ -740,23 +756,18 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     }
 
     document.querySelector("note").ondragstart = e => {
-
-      let target = document.querySelector(".target")
-      console.log(target)
-      if (target && ValidBlockType(target)){
-        let bounds = target.getBoundingClientRect()
-        if (bounds.left - 24 < X && X < bounds.left && bounds.top < Y && Y < bounds.bottom) {
-          document.querySelector("note").classList.add("dragging")
-          INSERTING = [... document.querySelectorAll(".selected")]
-          e.dataTransfer.setDragImage(Render(["div", "hello"]), 0, 0);
-          return
-        }
-      }
       e.preventDefault()
-      e.stopPropagation()
     }
 
-    document.querySelector("note").ondragend = e => {
+
+    document.querySelector("selection").ondragstart = e => {
+      document.querySelector("note").classList.add("dragging")
+      INSERTING = [... SELECTION]
+      e.dataTransfer.setDragImage(Render(["div", "hello"]), 0, 0);
+      console.log("DRAG START", TARGET)
+    }
+
+    document.querySelector("selection").ondragend = e => {
       console.log("DRAG END")
       document.querySelector("note").classList.remove("dragging")
       let point = document.querySelector(".insertion")
@@ -781,6 +792,15 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     document.querySelector("note").ondrop = e => {
       e.preventDefault()
     }
+
+
+
+
+
+
+
+
+
 
 
 
