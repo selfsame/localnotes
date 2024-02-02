@@ -82,10 +82,11 @@ Today's project
     [x] collapsed cursor selection shouldn't trigger 'selected'?
     [ ] change 'target' and 'selection' from classes to a list of elements - this should some bugs with platform dragging and 
         avoids issues with history saving changes to ephemeral classes
-        [ ] the handles should be their own nodes outside of the note that are positioned
+        [x] the handles should be their own nodes outside of the note that are positioned
+        [ ] use nth child to do drag styling on selection? or disable history saving during drag?
         [x] reimplement the ondrag handler
         [x] note should still have it's drag/drop prevented
-        [ ] single mouse target should get a handle too
+        [x] single mouse target should get a handle too
         [ ] SELECTION needs to include TARGET and be ordered correctly
 
 
@@ -303,10 +304,11 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
   </script>
 
   <script>
-    const DOC_VERSION = 0;
-    var note = null;
-    var TARGET = null;
-    var SELECTION = [];
+    const DOC_VERSION = 0
+    var note = null
+    var TARGET = null
+    var SELECTION = []
+    INSERTING = false
 
     Array.prototype.distinct = function(){
       let res = []
@@ -373,7 +375,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     }
 
     function NewNote() {
-      random_emoji = emoji[Math.floor(Math.random()*emoji.length)];
+      random_emoji = emoji[Math.floor(Math.random()*emoji.length)]
       res = {
         uid: Math.random().toString(16).slice(2),
         title: `${random_emoji} Untitled`,
@@ -435,6 +437,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     var HIDX = 0
 
     function HistoryRecordState(){
+      if (INSERTING) {return}
       let s = document.querySelector("note").innerHTML
       if (HISTORY[HIDX] != s) {
         HISTORY = HISTORY.slice(0, HIDX+1)
@@ -452,7 +455,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
         HIDX += 1
         document.querySelector("note").innerHTML = HISTORY[HIDX]}}
 
-    document.querySelector("note").addEventListener("keydown", (e) => {
+    document.addEventListener("keydown", (e) => {
       if (e.key === "z" && e.ctrlKey === true) {
         e.preventDefault()
         HistoryUndo()}
@@ -679,7 +682,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     // track blocks under mouse and under selection. Should probably also detect 'child' indentation blocks
     addEventListener("mousemove", (e) => {window.X = e.clientX; window.Y = e.clientY})
 
-    document.querySelector("note").onmousemove = e => {
+    document.onmousemove = e => {
       
       // TODO get top level block
       let target = BubbledBlock(e.target)
@@ -689,21 +692,38 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
         for (e of SelectedElements()) {
           SELECTION.push(e)
         }}
-      TARGET = target
+
+      if (target) {
+        TARGET = target
+      }
+      
+      
+      let place_handle = (handle, top, left, bottom) => {
+        handle.style.left = `${left-12}px`
+        handle.style.top = `${top}px`
+        handle.style.width = `24px`
+        handle.style.height = `${bottom-top}px`
+      }
 
       let a = document.querySelectorAll("selection")[0]
       let b = document.querySelectorAll("selection")[1]
+
+      for (const x of [a, b]) {
+        x.style.top = "-100px"
+        x.style.height = "0px"
+      }
+      
       if (SELECTION.length > 0) {
         let b1 = SELECTION[0].getBoundingClientRect()
         let b2 = SELECTION[SELECTION.length-1].getBoundingClientRect()
         let groupb = SELECTION[0].parentNode.getBoundingClientRect()
-        a.style.left = `${groupb.left-12}px`
-        a.style.top = `${b1.top}px`
-        a.style.width = `24px`
-        a.style.height = `${b2.bottom-b1.top}px`
-      } else {
-        a.style.top = "-100px"
-        a.style.height = "0px"
+        place_handle(a, b1.top, groupb.left, b2.bottom)
+      }
+
+      if (TARGET && !SELECTION.includes(TARGET) && TARGET.parentNode) {
+        let b1 = TARGET.getBoundingClientRect()
+        let groupb = TARGET.parentNode.getBoundingClientRect()
+        place_handle(b, b1.top, groupb.left, b1.bottom)
       }
     }
 
@@ -715,11 +735,10 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
 
 
     // Insertion stuff
-    INSERTING = false
 
     function BRectDistance(rect, x, y) {
-      var dx = Math.max(rect.left - x, 0, x - rect.right);
-      var dy = Math.max(rect.top - y, 0, y - rect.bottom);
+      var dx = Math.max(rect.left - x, 0, x - rect.right)
+      var dy = Math.max(rect.top - y, 0, y - rect.bottom)
       return Math.sqrt(dx*dx + dy*dy)
     }
 
@@ -759,35 +778,45 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       e.preventDefault()
     }
 
-
-    document.querySelector("selection").ondragstart = e => {
-      document.querySelector("note").classList.add("dragging")
-      INSERTING = [... SELECTION]
-      e.dataTransfer.setDragImage(Render(["div", "hello"]), 0, 0);
-      console.log("DRAG START", TARGET)
+    document.querySelector("note").onmouseleave = e => {
+      TARGET= null;
     }
 
-    document.querySelector("selection").ondragend = e => {
-      console.log("DRAG END")
-      document.querySelector("note").classList.remove("dragging")
-      let point = document.querySelector(".insertion")
-      if (INSERTING && point && !INSERTING.includes(point)) {
-        if (point.classList.contains("ibefore")) {
-          INSERTING.forEach(el => {
-            el.parentNode.removeChild(el)
-            point.before(el)
-          })
-        } else {
-          INSERTING.reverse()
-          INSERTING.forEach(el => {
-            el.parentNode.removeChild(el)
-            point.after(el)
-          })
-        }
+    document.querySelectorAll("selection").forEach((sel)=> {
+      sel.ondragstart = e => {
+        document.querySelector("note").classList.add("dragging")
+        // using queryselector to order target in selection
+        let marked = [... SELECTION, TARGET]
+        marked.forEach((e)=> e?.classList.add("_marked"))
+        INSERTING = [... document.querySelectorAll("._marked")]
+        INSERTING.forEach((e)=> e.classList.remove("_marked"))
+        e.dataTransfer.setDragImage(Render(["div", "hello"]), 0, 0)
+        console.log("DRAG START", TARGET)
       }
-      document.querySelectorAll(".insertion").forEach((el)=>el.classList.remove("insertion"))
-      INSERTING = false
-    }
+
+      sel.ondragend = e => {
+        console.log("DRAG END")
+        document.querySelector("note").classList.remove("dragging")
+        let point = document.querySelector(".insertion")
+        if (INSERTING && point && !INSERTING.includes(point)) {
+          if (point.classList.contains("ibefore")) {
+            INSERTING.forEach(el => {
+              el.parentNode.removeChild(el)
+              point.before(el)
+            })
+          } else {
+            INSERTING.reverse()
+            INSERTING.forEach(el => {
+              el.parentNode.removeChild(el)
+              point.after(el)
+            })
+          }
+        }
+        document.querySelectorAll(".insertion").forEach((el)=>el.classList.remove("insertion"))
+        INSERTING = false
+      }
+    })
+    
 
     document.querySelector("note").ondrop = e => {
       e.preventDefault()
@@ -854,7 +883,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
           reader.onload = function (event) {
             document.querySelector("note").appendChild(Render(['p', ['img', {"src": event.target.result}]]))
           }
-        reader.readAsDataURL(file);
+        reader.readAsDataURL(file)
         e.preventDefault()
         }
       })
