@@ -157,16 +157,13 @@ Today's project
       padding: 1em;
     }
 
-    note {
-      padding: 1em;
-    }
-
     note, #title {
       outline: none
     }
 
     #title {
       font-size: 4em;
+      padding: 0px 24px;
     }
 
     note {
@@ -174,6 +171,7 @@ Today's project
       min-height: calc(100vh - 200px);
       position: relative;
       display: block;
+      padding: 2em;
     }
 
     h1,h2,h3,h4,p,li {
@@ -282,6 +280,7 @@ Today's project
     note div::before {content: "<div>"}
     note div::after {content: "</div>"} */
 
+    * { outline: 1px solid rgba(256,0,0,0.2) !important;}
   </style>
 </head>
 
@@ -442,18 +441,22 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       if (HISTORY[HIDX] != s) {
         HISTORY = HISTORY.slice(0, HIDX+1)
         HISTORY.push(s)
-        HIDX = HISTORY.length-1}}
+        HIDX = HISTORY.length-1}
+      SyncContent()}
 
     function HistoryUndo(){
       HistoryRecordState() // due to interval recording there might be changes
       if (HIDX > 0) {
         HIDX -= 1
-        document.querySelector("note").innerHTML = HISTORY[HIDX]}}
+        document.querySelector("note").innerHTML = HISTORY[HIDX]}
+        SyncContent()
+      }
 
     function HistoryRedo(){
       if (HIDX < HISTORY.length-1) {
         HIDX += 1
-        document.querySelector("note").innerHTML = HISTORY[HIDX]}}
+        document.querySelector("note").innerHTML = HISTORY[HIDX]
+        SyncContent()}}
 
     document.addEventListener("keydown", (e) => {
       if (e.key === "z" && e.ctrlKey === true) {
@@ -540,6 +543,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
 
     // bubble up until a valid block is found
     function BubbledBlock(el){
+      if (!document.querySelector("note").contains(el)) { return }
       while (!ValidBlockType(el) && el.parentNode) {
         el = el.parentNode}
       if (ValidBlockType(el)) {return el}
@@ -682,8 +686,15 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     // track blocks under mouse and under selection. Should probably also detect 'child' indentation blocks
     addEventListener("mousemove", (e) => {window.X = e.clientX; window.Y = e.clientY})
 
+    
+
     document.onmousemove = e => {
       
+      let bounds = document.querySelector("note").getBoundingClientRect()
+      if (e.clientX < bounds.left || e.clientX > bounds.right || e.clientY < bounds.top || e.clientY > bounds.bottom) {
+        TARGET = null;
+      }
+
       // TODO get top level block
       let target = BubbledBlock(e.target)
       SELECTION = []
@@ -699,7 +710,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       
       
       let place_handle = (handle, top, left, bottom) => {
-        handle.style.left = `${left-12}px`
+        handle.style.left = `${left}px`
         handle.style.top = `${top}px`
         handle.style.width = `24px`
         handle.style.height = `${bottom-top}px`
@@ -776,10 +787,6 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
 
     document.querySelector("note").ondragstart = e => {
       e.preventDefault()
-    }
-
-    document.querySelector("note").onmouseleave = e => {
-      TARGET= null;
     }
 
     document.querySelectorAll("selection").forEach((sel)=> {
