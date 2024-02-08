@@ -54,12 +54,13 @@ BUGS
 [ ] new block in header doesn't preserve indent. Might need to lint new blocks as todo needs it's checked cleared too
 [ ] pasting sticks content inside of a block, not even sure of the desired behaviour here, maybe
     contents should be 'children' only in so far as having the parent's indentation
-[ ] <img> are really hard to edit around, should these be wrapped in a div or something?
+[x] <img> are really hard to edit around, should these be wrapped in a div or something?
 [ ] 'li' has different positioning in chrome vs firefox
 [ ] pasting blocks picks up style as inline, which breaks things
 [ ] selection/insertion is triggering history states
 [ ] todo blocks need mouse events for more than just the checkbox (should check bounds on the rect for toggling it)
 [ ] chrome - when trying to drag a block that is partially range selected the selection collapses and it fails
+[ ] the mouse target can stick around, it should use that nearest neighbor function
 
 Today's project
 [ ] I'm in need of a debug section that shows the current range with live update
@@ -80,6 +81,7 @@ Today's project
     [/] insertion has 'in', 'before', 'after', 'left', 'right' detection
     [x] drop inserts selected elements
     [x] collapsed cursor selection shouldn't trigger 'selected'?
+    [ ] support touch events
     [ ] change 'target' and 'selection' from classes to a list of elements - this should some bugs with platform dragging and 
         avoids issues with history saving changes to ephemeral classes
         [x] the handles should be their own nodes outside of the note that are positioned
@@ -87,7 +89,7 @@ Today's project
         [x] reimplement the ondrag handler
         [x] note should still have it's drag/drop prevented
         [x] single mouse target should get a handle too
-        [ ] SELECTION needs to include TARGET and be ordered correctly
+        [x] SELECTION needs to include TARGET and be ordered correctly
 
 
 
@@ -264,6 +266,10 @@ Today's project
       pointer-events: auto;
       background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAABbmlDQ1BpY2MAACiRdZG9S0JhFIcftTDKkFAiosHBokEhCqKxbHCREDPIatHrV+DH5V4lpDVoaRAaopa+hv6DWoPWgiAogojG5r6WkNu5Kiih5/Le8/B7z+9w7rlgDeWUvN4zD/lCSYsEA57V2JrH/o4FF26GGYoruroQDofoGj+PUi3x4Dd7da/rGAPJlK6ApU94VlG1krBMQ2irpJq8J+xWsvGk8ImwT5MBhW9NPdHgN5MzDf4yWYtGFsFq9vRk2jjRxkpWywtPCnvzubLSnMf8EkeqsLIseVTOGDoRggTwkKDMJjlK+CUXZGedfVN13xJF8SjyVqmgiSNDVrw+UcvSNSU5LXpKnhwVc+//96mnZ6Yb3R0B6H01jM9xsO9DrWoYv6eGUTsD2wtcF1r+ouxp7lv0akvzHoNzBy5vWlriAK52YeRZjWvxumSTY02n4eMCBmPguof+9caumvecP0F0W37RHRwewYTUOzf+AOECZ/uSmLScAAAACXBIWXMAAC4jAAAuIwF4pT92AAAAKklEQVQIW2P8DwQMSIAJxG5oaGA4cuQIRBikYvv27f/fv38PYv5nRNcCAFvgGrGltVmQAAAAAElFTkSuQmCC)
     
+    }
+
+    ._dragging {
+      opacity: 0.3;
     }
 
     /* note *::before, note *::after {
@@ -687,11 +693,17 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     addEventListener("mousemove", (e) => {window.X = e.clientX; window.Y = e.clientY})
 
     
+    function WithinBounds(bounds, x, y){
+      if (x < bounds.left || x > bounds.right || y < bounds.top || y > bounds.bottom) {
+        return false
+      }
+      return true
+    }
 
     document.onmousemove = e => {
       
       let bounds = document.querySelector("note").getBoundingClientRect()
-      if (e.clientX < bounds.left || e.clientX > bounds.right || e.clientY < bounds.top || e.clientY > bounds.bottom) {
+      if (!WithinBounds(bounds, e.clientX,e.clientY)) {
         TARGET = null;
       }
 
@@ -772,6 +784,10 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
           el.classList.remove("ibefore")
           el.classList.remove("iafter")
         })
+        // if not over note panel we want no insertion point
+        if (!WithinBounds(document.querySelector("note").getBoundingClientRect(), e.clientX,e.clientY)) {
+          return
+        }
         let closest = ClosestChild(document.querySelector("note"), e.clientX, e.clientY)
         if (closest) {
           closest.classList.add("insertion")
@@ -790,20 +806,23 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
     }
 
     document.querySelectorAll("selection").forEach((sel)=> {
+      // TODO need to switch drag to pointer events with my own tracking of a drag state so it works on chrome mobile
+      sel.addEventListener("pointerdown", (e)=>console.log("pointerdown"))
+      sel.addEventListener("pointermove", (e)=>console.log("pointermove!"))
+      sel.addEventListener("pointerup", (e)=>console.log("pointerup"))
+
       sel.ondragstart = e => {
-        document.querySelector("note").classList.add("dragging")
         // using queryselector to order target in selection
         let marked = [... SELECTION, TARGET]
-        marked.forEach((e)=> e?.classList.add("_marked"))
-        INSERTING = [... document.querySelectorAll("._marked")]
-        INSERTING.forEach((e)=> e.classList.remove("_marked"))
+        marked.forEach((e)=> e?.classList.add("_dragging"))
+        INSERTING = [... document.querySelectorAll("._dragging")]
         e.dataTransfer.setDragImage(Render(["div", "hello"]), 0, 0)
         console.log("DRAG START", TARGET)
       }
 
       sel.ondragend = e => {
         console.log("DRAG END")
-        document.querySelector("note").classList.remove("dragging")
+        INSERTING.forEach((e)=> e.classList.remove("_dragging"))
         let point = document.querySelector(".insertion")
         if (INSERTING && point && !INSERTING.includes(point)) {
           if (point.classList.contains("ibefore")) {
