@@ -13,6 +13,7 @@ TODO
 [ ] better in-memory storage of notes (don't have to parse every time i render sidebar or do a search)
 [ ] use indexedDB when available
     [ ] common interface for both
+[ ] mobile styling, probably with expandable side bar
 
 [x] mini Vdom
     [x] class and id parsing from tag strings like 'div.foo#bar'
@@ -29,6 +30,8 @@ TODO
 
     
 [ ] drag and drop restructuring
+    basically want to say SetUpDrag(el, {start: f, drag: f, end: f}), drop target and insertion could be
+    genericized as well
     [ ] generic system, will use in sidebar and document
     [ ] configure hotspots for drop before, inside, after, left, right
     [ ] protocol style actions for insertion
@@ -51,16 +54,18 @@ TODO
 [ ] history should preserve per document during a session
 
 BUGS
-[ ] new block in header doesn't preserve indent. Might need to lint new blocks as todo needs it's checked cleared too
+[ ] new block in h1 doesn't preserve indent. Might need to lint new blocks as todo needs it's checked cleared too
 [ ] pasting sticks content inside of a block, not even sure of the desired behaviour here, maybe
     contents should be 'children' only in so far as having the parent's indentation
 [x] <img> are really hard to edit around, should these be wrapped in a div or something?
 [ ] 'li' has different positioning in chrome vs firefox
 [ ] pasting blocks picks up style as inline, which breaks things
-[ ] selection/insertion is triggering history states
+[x] selection/insertion is triggering history states
 [ ] todo blocks need mouse events for more than just the checkbox (should check bounds on the rect for toggling it)
-[ ] chrome - when trying to drag a block that is partially range selected the selection collapses and it fails
+[x] chrome - when trying to drag a block that is partially range selected the selection collapses and it fails
 [ ] the mouse target can stick around, it should use that nearest neighbor function
+[x] emoji encoding isn't surviving file transfers
+[ ] deleting the last note can get app into bad state where meta "current_note" points to non existant note
 
 Today's project
 [ ] I'm in need of a debug section that shows the current range with live update
@@ -77,15 +82,16 @@ Today's project
     [x] store 'selected' elements during drag
     [x] drag img has all selected elements
     [x] dragged elements have low opacity
-    [/] drag can be cancelled, either dropping outside of note or on top of one of the dragged elements
+    [x] drag can be cancelled, either dropping outside of note or on top of one of the dragged elements
     [/] insertion has 'in', 'before', 'after', 'left', 'right' detection
     [x] drop inserts selected elements
     [x] collapsed cursor selection shouldn't trigger 'selected'?
-    [ ] support touch events
-    [ ] change 'target' and 'selection' from classes to a list of elements - this should some bugs with platform dragging and 
+    [x] support touch events
+    [ ] mobile needs to update block selection when range changes 
+    [x] change 'target' and 'selection' from classes to a list of elements - this should some bugs with platform dragging and 
         avoids issues with history saving changes to ephemeral classes
         [x] the handles should be their own nodes outside of the note that are positioned
-        [ ] use nth child to do drag styling on selection? or disable history saving during drag?
+        [x] use nth child to do drag styling on selection? or disable history saving during drag?
         [x] reimplement the ondrag handler
         [x] note should still have it's drag/drop prevented
         [x] single mouse target should get a handle too
@@ -99,7 +105,7 @@ Today's project
  -->
 
 <head>
-
+  <meta charset="utf-8">
   <link rel="shortcut icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='.8 .8 14.4 14.4'><path d='M10 8.99a1 1 0 00-.695 1.717l4.004 4a1 1 0 101.414-1.414l-4.004-4A1 1 0 0010 8.99z' fill='%2380b0ff' stroke='%235D7FDDaa' stroke-width='.3'/><path d='M6.508 1C3.48 1 1.002 3.474 1.002 6.5S3.48 12 6.508 12s5.504-2.474 5.504-5.5S9.536 1 6.508 1zm0 2a3.486 3.486 0 013.504 3.5c0 1.944-1.556 3.5-3.504 3.5a3.488 3.488 0 01-3.506-3.5C3.002 4.556 4.56 3 6.508 3z' fill='%2380b0ff' stroke='%235D7FDDaa' stroke-width='.3'/></svg>">
   
   <style>
@@ -264,7 +270,7 @@ Today's project
       display: block;
       cursor: grab;
       pointer-events: auto;
-      background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAABbmlDQ1BpY2MAACiRdZG9S0JhFIcftTDKkFAiosHBokEhCqKxbHCREDPIatHrV+DH5V4lpDVoaRAaopa+hv6DWoPWgiAogojG5r6WkNu5Kiih5/Le8/B7z+9w7rlgDeWUvN4zD/lCSYsEA57V2JrH/o4FF26GGYoruroQDofoGj+PUi3x4Dd7da/rGAPJlK6ApU94VlG1krBMQ2irpJq8J+xWsvGk8ImwT5MBhW9NPdHgN5MzDf4yWYtGFsFq9vRk2jjRxkpWywtPCnvzubLSnMf8EkeqsLIseVTOGDoRggTwkKDMJjlK+CUXZGedfVN13xJF8SjyVqmgiSNDVrw+UcvSNSU5LXpKnhwVc+//96mnZ6Yb3R0B6H01jM9xsO9DrWoYv6eGUTsD2wtcF1r+ouxp7lv0akvzHoNzBy5vWlriAK52YeRZjWvxumSTY02n4eMCBmPguof+9caumvecP0F0W37RHRwewYTUOzf+AOECZ/uSmLScAAAACXBIWXMAAC4jAAAuIwF4pT92AAAAKklEQVQIW2P8DwQMSIAJxG5oaGA4cuQIRBikYvv27f/fv38PYv5nRNcCAFvgGrGltVmQAAAAAElFTkSuQmCC)
+      background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAABbmlDQ1BpY2MAACiRdZG9S0JhFIcftTDKkFAiosHBokEhCqKxbHCREDPIatHrV+DH5V4lpDVoaRAaopa+hv6DWoPWgiAogojG5r6WkNu5Kiih5/Le8/B7z+9w7rlgDeWUvN4zD/lCSYsEA57V2JrH/o4FF26GGYoruroQDofoGj+PUi3x4Dd7da/rGAPJlK6ApU94VlG1krBMQ2irpJq8J+xWsvGk8ImwT5MBhW9NPdHgN5MzDf4yWYtGFsFq9vRk2jjRxkpWywtPCnvzubLSnMf8EkeqsLIseVTOGDoRggTwkKDMJjlK+CUXZGedfVN13xJF8SjyVqmgiSNDVrw+UcvSNSU5LXpKnhwVc+//96mnZ6Yb3R0B6H01jM9xsO9DrWoYv6eGUTsD2wtcF1r+ouxp7lv0akvzHoNzBy5vWlriAK52YeRZjWvxumSTY02n4eMCBmPguof+9caumvecP0F0W37RHRwewYTUOzf+AOECZ/uSmLScAAAACXBIWXMAAC4jAAAuIwF4pT92AAAAKklEQVQIW2P8DwQMSIAJxG5oaGA4cuQIRBikYvv27f/fv38PYv5nRNcCAFvgGrGltVmQAAAAAElFTkSuQmCC);
     
     }
 
@@ -299,8 +305,8 @@ Today's project
     <h1 id="title" contenteditable="true">title</h1>
     <note contenteditable="true" ></note>
   </document>
-  <selection draggable="true"></selection>
-  <selection draggable="true"></selection>
+  <selection></selection>
+  <selection></selection>
 
   <!-- https://unicode.org/emoji/charts-12.0/emoji-style.html
        res = []; document.querySelectorAll("a.plain").forEach((el)=>res.push(el.textContent)) -->
@@ -700,8 +706,8 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       return true
     }
 
-    document.onmousemove = e => {
-      
+
+    function UpdateTargetAndSelection (e) {
       let bounds = document.querySelector("note").getBoundingClientRect()
       if (!WithinBounds(bounds, e.clientX,e.clientY)) {
         TARGET = null;
@@ -720,8 +726,8 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
         TARGET = target
       }
       
-      
       let place_handle = (handle, top, left, bottom) => {
+        handle.style.display = ""
         handle.style.left = `${left}px`
         handle.style.top = `${top}px`
         handle.style.width = `24px`
@@ -732,8 +738,7 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       let b = document.querySelectorAll("selection")[1]
 
       for (const x of [a, b]) {
-        x.style.top = "-100px"
-        x.style.height = "0px"
+        x.style.display = "none"
       }
       
       if (SELECTION.length > 0) {
@@ -750,11 +755,27 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       }
     }
 
+    addEventListener("pointermove", UpdateTargetAndSelection)
+    addEventListener("pointerup", UpdateTargetAndSelection)
 
 
 
 
-
+    // TODO add an opt for possible drop targets with inside, before, after etc. handlers
+    function SetupDrag(el, handlers) {
+      el.style.touchAction = "none"
+      el.addEventListener("pointerdown", (e)=> {
+        el.setPointerCapture(e.pointerId)
+        handlers["start"]?.(e)
+      })
+      el.addEventListener("pointermove", (e)=> {
+        handlers["move"]?.(e)
+      })
+      el.addEventListener("pointerup", (e)=> {
+        el.releasePointerCapture(e.pointerId)
+        handlers["end"]?.(e)
+      })
+    }
 
 
     // Insertion stuff
@@ -776,71 +797,66 @@ emoji = ["☹️","☠️","❣️","❤️","🕳️","🗨️","🗯️","🖐
       return nodes[0]
     }
 
-    document.ondragover = (e) => {
-      
-      if (INSERTING) {
-        document.querySelectorAll(".insertion").forEach((el)=>{
-          el.classList.remove("insertion")
-          el.classList.remove("ibefore")
-          el.classList.remove("iafter")
-        })
-        // if not over note panel we want no insertion point
-        if (!WithinBounds(document.querySelector("note").getBoundingClientRect(), e.clientX,e.clientY)) {
-          return
-        }
-        let closest = ClosestChild(document.querySelector("note"), e.clientX, e.clientY)
-        if (closest) {
-          closest.classList.add("insertion")
-          let bounds = closest.getBoundingClientRect()
-          if (e.clientY < bounds.top+4) {
-            closest.classList.add("ibefore")
-          } else if (e.clientY > bounds.bottom-4) {
-            closest.classList.add("iafter")
-          } 
-        }
-      }
-    }
-
-    document.querySelector("note").ondragstart = e => {
-      e.preventDefault()
-    }
 
     document.querySelectorAll("selection").forEach((sel)=> {
-      // TODO need to switch drag to pointer events with my own tracking of a drag state so it works on chrome mobile
-      sel.addEventListener("pointerdown", (e)=>console.log("pointerdown"))
-      sel.addEventListener("pointermove", (e)=>console.log("pointermove!"))
-      sel.addEventListener("pointerup", (e)=>console.log("pointerup"))
 
-      sel.ondragstart = e => {
-        // using queryselector to order target in selection
-        let marked = [... SELECTION, TARGET]
-        marked.forEach((e)=> e?.classList.add("_dragging"))
-        INSERTING = [... document.querySelectorAll("._dragging")]
-        e.dataTransfer.setDragImage(Render(["div", "hello"]), 0, 0)
-        console.log("DRAG START", TARGET)
-      }
+      SetupDrag(sel, {
+        'start': e => {
+          // using queryselector to order target in selection
+          let marked = [... SELECTION, TARGET]
+          marked.forEach((e)=> e?.classList.add("_dragging"))
+          INSERTING = [... document.querySelectorAll("._dragging")]
+          console.log("DRAG START", TARGET)
+        },
 
-      sel.ondragend = e => {
-        console.log("DRAG END")
-        INSERTING.forEach((e)=> e.classList.remove("_dragging"))
-        let point = document.querySelector(".insertion")
-        if (INSERTING && point && !INSERTING.includes(point)) {
-          if (point.classList.contains("ibefore")) {
-            INSERTING.forEach(el => {
-              el.parentNode.removeChild(el)
-              point.before(el)
+        'move': e => {
+          if (INSERTING) {
+            document.querySelectorAll(".insertion").forEach((el)=>{
+              el.classList.remove("insertion")
+              el.classList.remove("ibefore")
+              el.classList.remove("iafter")
             })
-          } else {
-            INSERTING.reverse()
-            INSERTING.forEach(el => {
-              el.parentNode.removeChild(el)
-              point.after(el)
-            })
+            // if not over note panel we want no insertion point
+            if (!WithinBounds(document.querySelector("note").getBoundingClientRect(), e.clientX,e.clientY)) {
+              return
+            }
+            let closest = ClosestChild(document.querySelector("note"), e.clientX, e.clientY)
+            if (closest) {
+              closest.classList.add("insertion")
+              let bounds = closest.getBoundingClientRect()
+              if (e.clientY < bounds.top+4) {
+                closest.classList.add("ibefore")
+              } else if (e.clientY > bounds.bottom-4) {
+                closest.classList.add("iafter")
+              } 
+            }
           }
+        },
+
+        'end': e => {
+          console.log("DRAG END")
+          INSERTING.forEach((e)=> e.classList.remove("_dragging"))
+          let point = document.querySelector(".insertion")
+          if (INSERTING && point && !INSERTING.includes(point)) {
+            if (point.classList.contains("ibefore")) {
+              INSERTING.forEach(el => {
+                el.parentNode.removeChild(el)
+                point.before(el)
+              })
+            } else {
+              INSERTING.reverse()
+              INSERTING.forEach(el => {
+                el.parentNode.removeChild(el)
+                point.after(el)
+              })
+            }
+          }
+          document.querySelectorAll(".insertion").forEach((el)=>el.classList.remove("insertion"))
+          //document.querySelectorAll("selection").forEach((el)=>el.style.display = "none")
+          
+          INSERTING = false
         }
-        document.querySelectorAll(".insertion").forEach((el)=>el.classList.remove("insertion"))
-        INSERTING = false
-      }
+      })
     })
     
 
