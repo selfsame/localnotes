@@ -61,9 +61,12 @@ BUGS
 [ ] pasting blocks picks up style as inline, which breaks things
 [ ] todo blocks need mouse events for more than just the checkbox (should check bounds on the rect for toggling it)
 [ ] delete merging two blocks then converting to a TODO loses some nodes (look at the dom believe there is a \n inside the paragraph)
-[ ] deleting a selection that starts at the beginning of a block triggers the block type removal feature
+[x] deleting a selection that starts at the beginning of a block triggers the block type removal feature
 [ ] double clicking normal behaviour broken in note (selecting word)
-[ ] tab indent isn't finding the top level block correctly (spans, etc. show up in some situations)
+[x] tab indent isn't finding the top level block correctly (spans, etc. show up in some situations)
+[x] creating a todo in an empty document ends up with a todo div as a child of the document??
+[x] hover handles stick around too long (when you're typing)
+[ ] insertion blue bar isn't properly centered between some elements
 
 Today's project
 [ ] I'm in need of a debug section that shows the current range with live update
@@ -249,6 +252,16 @@ Today's project
       outline: 1px solid rgba(255, 0, 0, 0.199);
     } */
 
+    #imarker {
+      display: none;
+      position: absolute;
+      width: 100%;
+      height: 2px;
+      background-color: red;
+      top: 0px;
+      left:200px;
+    }
+
     .insertion::after {
       content: '';
       display: block;
@@ -311,6 +324,7 @@ Today's project
   </document>
   <selection></selection>
   <selection></selection>
+  <div id="imarker"></div>
 
   <!-- https://unicode.org/emoji/charts-12.0/emoji-style.html
        res = []; document.querySelectorAll("a.plain").forEach((el)=>res.push(el.textContent)) -->
@@ -708,14 +722,16 @@ function Render(node) {
       }
       // possible to have top level text when starting from empty editable
       for (node of el.childNodes){
-        ConvertCodeMarkup(node)
         if (node.nodeName === "#text") {
           SaveSelection()
           p = Render(['p'])
           node.replaceWith(p)
           p.appendChild(node)
           LoadSelection()
-        }
+          node = p
+        } 
+        ConvertCodeMarkup(node)
+        
       }
 
       console.log(el.innerHTML)
@@ -754,8 +770,6 @@ function Render(node) {
         }  
       }
     }
-
-
 
 
     function RenderSidebar() {
@@ -920,6 +934,27 @@ function Render(node) {
                 closest.classList.add("iafter")
               } 
             }
+          
+            // WIP instead of css on the insertion element let's calculate the midpoint between their two
+            // bounding boxes
+            marker = document.querySelector("#imarker")
+            let after = document.querySelector(".ibefore")
+            let before = document.querySelector(".iafter")
+            before = before || after?.previousElementSibling
+            after = after || before?.nextElementSibling
+            marker.style.display = "none"
+            if (before || after) {
+              marker.style.display = "inherit"
+              const [b, a] = [before, after].map(el => el?.getBoundingClientRect() || { top: 0, bottom: 0, left: 0, right: 0 })
+              const midPoint = {
+                x: (b.right + a.left) / 2,
+                y: (b.bottom + a.top) / 2,
+                ...(!before || !after) && {
+                  x: (b.left + b.right + a.left + a.right) / 4,
+                  y: before ? b.bottom : a.top}}
+              //console.log(midPoint)
+              marker.style.top = `${midPoint.y}px`
+            }
           }
         },
 
@@ -942,6 +977,7 @@ function Render(node) {
             }
           }
           document.querySelectorAll(".insertion").forEach((el)=>el.classList.remove("insertion"))
+          document.querySelector("#imarker").style.display = "none"
           //document.querySelectorAll("selection").forEach((el)=>el.style.display = "none")
           
           INSERTING = false
@@ -970,6 +1006,8 @@ function Render(node) {
     document.querySelector("#title").addEventListener("input", ()=>{SyncContent(); RenderSidebar()}, false)
     document.querySelector("note").addEventListener("keydown", (e) => {
       console.log(e)
+      // nice to hide selection handles once typing begins
+      document.querySelectorAll("selection").forEach((el)=>el.style.display = "none")
       let r = CurrentRange()
       if (r.collapsed && r.startContainer === e.target) {
         console.log("out of a block!!!")
@@ -995,6 +1033,7 @@ function Render(node) {
         let text = getSelection().getRangeAt(0).startContainer
         for (const [k,v] of Object.entries(block_defs)) {
           if (before === v.shortcode) {
+            // TODO should probably sanity check we're in a block
             let block = text.parentNode
             text.textContent = text.textContent.slice(v.shortcode.length)
             let el = ReplaceNode(block, Render(v.vdom))
