@@ -1004,9 +1004,15 @@ function Render(node) {
 
     document.querySelector("note").addEventListener("input", ()=>{LintNote(); SyncContent()}, false)
     document.querySelector("#title").addEventListener("input", (e)=>{
-      if (e.inputType == "insertParagraph") document.querySelector("note").focus()
       SyncContent();
       RenderSidebar()}, false)
+    document.querySelector("#title").addEventListener("keydown", (e)=>{
+      console.log(e)
+      if (e.key == "Enter") {
+        e.preventDefault()
+        document.querySelector("note").focus()
+      }
+    })
     document.querySelector("note").addEventListener("keydown", (e) => {
       console.log(e)
       // nice to hide selection handles once typing begins
