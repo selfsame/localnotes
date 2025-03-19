@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 
-<!-- 
+<!--
 TODO
 [x] document json with metadata, title and UID key name
 [x] app metadata, last open file
@@ -28,7 +28,7 @@ TODO
     [ ] greenlist of top level elements, strip everything else
     [ ] selection styling (bold, italic). I actually think there's contenteditable commands to apply these things?
 
-    
+
 [ ] drag and drop restructuring
     basically want to say SetUpDrag(el, {start: f, drag: f, end: f}), drop target and insertion could be
     genericized as well
@@ -77,7 +77,7 @@ Today's project
 [ ] drag and drop blocks
     [x] draw CSS drag handle on every element
     [x] detect drag is over handle
-    [x] handle shows up on hover 
+    [x] handle shows up on hover
         [x] and selection
     [x] insertion tracking shows up only during handle drag
     [x] store 'selected' elements during drag
@@ -88,8 +88,8 @@ Today's project
     [x] drop inserts selected elements
     [x] collapsed cursor selection shouldn't trigger 'selected'?
     [x] support touch events
-    [ ] mobile needs to update block selection when range changes 
-    [x] change 'target' and 'selection' from classes to a list of elements - this should some bugs with platform dragging and 
+    [ ] mobile needs to update block selection when range changes
+    [x] change 'target' and 'selection' from classes to a list of elements - this should some bugs with platform dragging and
         avoids issues with history saving changes to ephemeral classes
         [x] the handles should be their own nodes outside of the note that are positioned
         [x] use nth child to do drag styling on selection? or disable history saving during drag?
@@ -101,14 +101,14 @@ Today's project
 
 
 
-    
+
 
  -->
 
 <head>
   <meta charset="utf-8">
   <link rel="shortcut icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='.8 .8 14.4 14.4'><path d='M10 8.99a1 1 0 00-.695 1.717l4.004 4a1 1 0 101.414-1.414l-4.004-4A1 1 0 0010 8.99z' fill='%2380b0ff' stroke='%235D7FDDaa' stroke-width='.3'/><path d='M6.508 1C3.48 1 1.002 3.474 1.002 6.5S3.48 12 6.508 12s5.504-2.474 5.504-5.5S9.536 1 6.508 1zm0 2a3.486 3.486 0 013.504 3.5c0 1.944-1.556 3.5-3.504 3.5a3.488 3.488 0 01-3.506-3.5C3.002 4.556 4.56 3 6.508 3z' fill='%2380b0ff' stroke='%235D7FDDaa' stroke-width='.3'/></svg>">
-  
+
   <style>
     body {
       margin: 0;
@@ -138,7 +138,7 @@ Today's project
         padding: 12px 0px;
         cursor: pointer;
       }
-      
+
       sidebar p {
         margin-top: 4px;
         margin: 0em;
@@ -288,7 +288,7 @@ Today's project
       cursor: grab;
       pointer-events: auto;
       background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAABbmlDQ1BpY2MAACiRdZG9S0JhFIcftTDKkFAiosHBokEhCqKxbHCREDPIatHrV+DH5V4lpDVoaRAaopa+hv6DWoPWgiAogojG5r6WkNu5Kiih5/Le8/B7z+9w7rlgDeWUvN4zD/lCSYsEA57V2JrH/o4FF26GGYoruroQDofoGj+PUi3x4Dd7da/rGAPJlK6ApU94VlG1krBMQ2irpJq8J+xWsvGk8ImwT5MBhW9NPdHgN5MzDf4yWYtGFsFq9vRk2jjRxkpWywtPCnvzubLSnMf8EkeqsLIseVTOGDoRggTwkKDMJjlK+CUXZGedfVN13xJF8SjyVqmgiSNDVrw+UcvSNSU5LXpKnhwVc+//96mnZ6Yb3R0B6H01jM9xsO9DrWoYv6eGUTsD2wtcF1r+ouxp7lv0akvzHoNzBy5vWlriAK52YeRZjWvxumSTY02n4eMCBmPguof+9caumvecP0F0W37RHRwewYTUOzf+AOECZ/uSmLScAAAACXBIWXMAAC4jAAAuIwF4pT92AAAAKklEQVQIW2P8DwQMSIAJxG5oaGA4cuQIRBikYvv27f/fv38PYv5nRNcCAFvgGrGltVmQAAAAAElFTkSuQmCC);
-    
+
     }
 
     ._dragging {
@@ -351,7 +351,7 @@ function Render(node) {
   if (!node) {
     return
   } else if (typeof(node) === 'string') {
-    return document.createTextNode(node) 
+    return document.createTextNode(node)
   } else {
     // the node string might contain an id or classes, like "button#main.red.disabled"
     // here we parse those out
@@ -405,7 +405,7 @@ function Render(node) {
       f(Object.entries(localStorage))
     }
 
-    // Note file stuff    
+    // Note file stuff
 
     function SaveMeta(){
       localStorage.setItem('meta', JSON.stringify(meta))
@@ -470,7 +470,7 @@ function Render(node) {
 
 
 
-    /* TODO 
+    /* TODO
        [x] undo/redo traversal
        [x] key command capture
        [x] state change truncates stack
@@ -729,9 +729,9 @@ function Render(node) {
           p.appendChild(node)
           LoadSelection()
           node = p
-        } 
+        }
         ConvertCodeMarkup(node)
-        
+
       }
 
       console.log(el.innerHTML)
@@ -755,8 +755,8 @@ function Render(node) {
     function OPDelete(e){
       let r = CurrentRange()
       // figure out if I'm at the beginning of a block - I think this is broken a bit
-      if ((IsText(r.startContainer) 
-           && ValidBlockType(r.startContainer.parentNode) 
+      if ((IsText(r.startContainer)
+           && ValidBlockType(r.startContainer.parentNode)
            && !r.startContainer.previousSibling
            && r.startOffset == 0)
           || (ValidBlockType(r.startContainer) && r.startOffset == 0)){
@@ -767,7 +767,7 @@ function Render(node) {
           let el = ReplaceNode(block, Render(['p', {class: StripBlockClasses(block.className)}]))
           PlaceCursor(el, 0)
           e.preventDefault()
-        }  
+        }
       }
     }
 
@@ -802,7 +802,7 @@ function Render(node) {
     // track blocks under mouse and under selection. Should probably also detect 'child' indentation blocks
     addEventListener("mousemove", (e) => {window.X = e.clientX; window.Y = e.clientY})
 
-    
+
     function WithinBounds(bounds, x, y){
       if (x < bounds.left || x > bounds.right || y < bounds.top || y > bounds.bottom) {
         return false
@@ -829,7 +829,7 @@ function Render(node) {
       if (target) {
         TARGET = target
       }
-      
+
       let place_handle = (handle, top, left, bottom) => {
         handle.style.display = ""
         handle.style.left = `${left}px`
@@ -844,7 +844,7 @@ function Render(node) {
       for (const x of [a, b]) {
         x.style.display = "none"
       }
-      
+
       if (SELECTION.length > 0) {
         let b1 = SELECTION[0].getBoundingClientRect()
         let b2 = SELECTION[SELECTION.length-1].getBoundingClientRect()
@@ -881,7 +881,7 @@ function Render(node) {
       })
     }
 
-    
+
     // Insertion stuff
 
     function BRectDistance(rect, x, y) {
@@ -932,9 +932,9 @@ function Render(node) {
                 closest.classList.add("ibefore")
               } else if (e.clientY > bounds.bottom-4) {
                 closest.classList.add("iafter")
-              } 
+              }
             }
-          
+
             // WIP instead of css on the insertion element let's calculate the midpoint between their two
             // bounding boxes
             marker = document.querySelector("#imarker")
@@ -979,12 +979,12 @@ function Render(node) {
           document.querySelectorAll(".insertion").forEach((el)=>el.classList.remove("insertion"))
           document.querySelector("#imarker").style.display = "none"
           //document.querySelectorAll("selection").forEach((el)=>el.style.display = "none")
-          
+
           INSERTING = false
         }
       })
     })
-    
+
 
     document.querySelector("note").ondrop = e => {
       e.preventDefault()
@@ -1001,9 +1001,12 @@ function Render(node) {
 
 
 
-                
+
     document.querySelector("note").addEventListener("input", ()=>{LintNote(); SyncContent()}, false)
-    document.querySelector("#title").addEventListener("input", ()=>{SyncContent(); RenderSidebar()}, false)
+    document.querySelector("#title").addEventListener("input", (e)=>{
+      if (e.inputType == "insertParagraph") document.querySelector("note").focus()
+      SyncContent();
+      RenderSidebar()}, false)
     document.querySelector("note").addEventListener("keydown", (e) => {
       console.log(e)
       // nice to hide selection handles once typing begins
@@ -1011,7 +1014,7 @@ function Render(node) {
       let r = CurrentRange()
       if (r.collapsed && r.startContainer === e.target) {
         console.log("out of a block!!!")
-        let block = e.target.childNodes[r.startOffset] || e.target.childNodes[0] 
+        let block = e.target.childNodes[r.startOffset] || e.target.childNodes[0]
         if (block) {
           PlaceCursor(block, block.childNodes.length)
         }
@@ -1058,7 +1061,7 @@ function Render(node) {
         e.preventDefault()
         }
       })
-      
+
     }, false)
 
     var meta = JSON.parse(localStorage.getItem('meta')) || {current_note: null}

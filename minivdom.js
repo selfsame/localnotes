@@ -51,6 +51,11 @@ Some questions:
 
   If I did cache subcomponents then I'd have to check equality on the arg list as well.
 
+  When the re-render occurs I'd then want to avoid calling child components if their equality matched, so
+  some sort of index of child component is in order, as well as a state of re-rendering where the cache is accessible.
+
+  May not hurt to formalize the way I talk about that as somthing like a 'Context'
+
 
   DOM patching
 
